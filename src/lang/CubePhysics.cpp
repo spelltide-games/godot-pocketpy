@@ -5,8 +5,8 @@
 namespace cube_physics {
 
 static void broad_phase_query(Space *space, const AABB &aabb, uint32_t layer_mask, void *ctx, void (*callback)(Space *space, Body *candidate, void *ctx)) {
-	for (int i = 0; i < 2; i++) {
-		for (int j = 0; j < 2; j++) {
+	for (int i = -1; i <= 1; i++) {
+		for (int j = -1; j <= 1; j++) {
 			Vector2i chunk_pos = space->to_chunk(aabb.position()) + Vector2i(i, j);
 			Body **p_candidates = space->chunks.getptr(chunk_pos);
 			if (p_candidates) {
@@ -61,7 +61,13 @@ void Space::step(float delta) {
 				max_sep = n_alt_length - a->cube.radius - b->cube.radius;
 
 				if (max_sep < 0) {
-					space->add_curr_pair(a, b, n_alt / n_alt_length, max_sep);
+					if (n_alt_length > FLOAT_EPS) {
+						n_alt /= n_alt_length;
+					} else {
+						n_alt = a->position() - b->position();
+						n_alt /= n_alt.length();
+					}
+					space->add_curr_pair(a, b, n_alt, max_sep);
 					// print_line("max_sep_alt: " + rtos(max_sep) + ", n_alt: " + n_alt);
 				}
 			}
@@ -112,17 +118,17 @@ void Space::step(float delta) {
 	// send signals
 	if (pair_added) {
 		for (const auto &[pair, info] : curr_pairs) {
+			assert(!pair.a->is_removed);
+			assert(!pair.b->is_removed);
 			if (!prev_pairs.has(pair)) {
-				if (!pair.a->is_removed && !pair.b->is_removed) {
-					pair_added(this, pair.a, pair.b, info.normal);
-				}
+				pair_added(this, pair.a, pair.b, info.normal);
 			}
 		}
 	}
 	if (pair_removed) {
 		for (const auto &[pair, info] : prev_pairs) {
-			if (!curr_pairs.has(pair)) {
-				if (!pair.a->is_removed && !pair.b->is_removed) {
+			if (!pair.a->is_removed && !pair.b->is_removed) {
+				if (!curr_pairs.has(pair)) {
 					pair_removed(this, pair.a, pair.b);
 				}
 			}
@@ -145,10 +151,10 @@ void Space::step(float delta) {
 	}
 
 	// delete removed bodies
-	for (Body *body : removed_bodies) {
+	for (Body *body : prev_removed_bodies) {
 		delete body;
 	}
-	removed_bodies.clear();
+	prev_removed_bodies.clear();
 }
 
 // godot Node
@@ -277,6 +283,7 @@ void CubePhysicsBody::_exit_tree() {
 		return;
 	}
 	space->destroy_body(body);
+	body = nullptr;
 }
 
 } // namespace cube_physics

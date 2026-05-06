@@ -299,10 +299,10 @@ struct Space {
 	HashMap<Vector2i, Body *> chunks;
 
 	HashSet<Body *> dynamic_bodies;
+	HashSet<Body *> prev_removed_bodies;
 
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> curr_pairs;
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> prev_pairs;
-	HashSet<Body *> removed_bodies;
 
 	void (*pair_added)(Space *space, Body *a, Body *b, Vector3 normal);
 	void (*pair_removed)(Space *space, Body *a, Body *b);
@@ -379,7 +379,7 @@ struct Space {
 		}
 		body_count--;
 		body->is_removed = true;
-		removed_bodies.insert(body);
+		prev_removed_bodies.insert(body);
 	}
 
 	Vector2i to_chunk(Vector3 position) const {
@@ -404,6 +404,9 @@ struct Space {
 				delete curr;
 				curr = next;
 			}
+		}
+		for (Body *body : prev_removed_bodies) {
+			delete body;
 		}
 	}
 };
