@@ -11,6 +11,7 @@ struct Space;
 
 const float FLOAT_MAX = 1e9f;
 const float FLOAT_EPS = 1.19209290e-7f;
+const float LINE_IS_POINT_THRESHOLD = 1e-3f;
 const float PENETRATION_CORRECTION_PERCENTAGE = 0.2f;
 const float PENETRATION_SLOP = FLOAT_EPS;
 const Vector2i INVALID_CHUNK_POS = Vector2i(INT_MAX, INT_MAX);
@@ -40,6 +41,9 @@ inline bool aabb_intersects(Vector3 vmin, Vector3 vmax, Vector3 other_vmin, Vect
 
 inline Vector3 project_point_on_line(Vector3 point, Line line) {
 	Vector3 d = line[1] - line[0];
+	if (fabs(d.x) < LINE_IS_POINT_THRESHOLD && fabs(d.y) < LINE_IS_POINT_THRESHOLD && fabs(d.z) < LINE_IS_POINT_THRESHOLD) {
+		return line[0];
+	}
 	Vector3 v = point - line[0];
 	float t = v.dot(d) / d.dot(d);
 	t = CLAMP(t, 0.0f, 1.0f);
