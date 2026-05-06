@@ -43,6 +43,15 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		velocity = init_vel
 
+		body_entered.connect(_on_body_entered)
+		body_exited.connect(_on_body_exited)
+
+func _on_body_entered(other: CubePhysicsBody, normal: Vector3):
+	print('body_enter: ', self.name + ' -> ' + other.name, ' (', normal)
+
+func _on_body_exited(other: CubePhysicsBody):
+	print('body_exited:', self.name + ' -> ' + other.name)
+
 func _process(_delta: float) -> void:
 	var cube = Cube.new()
 	cube.radius = radius01 * extent[extent.min_axis_index()]
