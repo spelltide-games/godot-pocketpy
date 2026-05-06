@@ -238,18 +238,15 @@ struct Body {
 	Vector3 instant_velocity;
 	Vector2i chunk_pos;
 
-	uint32_t layer;
+	bool is_removed;
+
 	bool is_static;
 	bool is_trigger;
-	bool signal_enabled;
+	uint32_t layer;
 	float mass;
 
-	Body(void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) :
-			prev(nullptr), next(nullptr), ctx(ctx), layer(layer), is_static(is_static), is_trigger(is_trigger), signal_enabled(false), mass(mass) {
-		std::memset(&cube, 0, sizeof(Cube));
-		velocity.zero();
-		instant_velocity.zero();
-		chunk_pos = INVALID_CHUNK_POS;
+	Body(void *ctx, bool is_static, bool is_trigger, uint32_t layer, float mass) :
+			prev(nullptr), next(nullptr), ctx(ctx), cube(), velocity(Vector3(0, 0, 0)), instant_velocity(Vector3(0, 0, 0)), chunk_pos(INVALID_CHUNK_POS), is_removed(false), is_static(is_static), is_trigger(is_trigger), layer(layer), mass(mass) {
 	}
 
 	Vector3 position() const { return cube.core.position(); }
@@ -304,6 +301,7 @@ struct Space {
 
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> curr_pairs;
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> prev_pairs;
+	HashSet<Body *> removed_bodies;
 
 	void (*pair_added)(Space *space, Body *a, Body *b, Vector3 normal);
 	void (*pair_removed)(Space *space, Body *a, Body *b);
@@ -326,8 +324,8 @@ struct Space {
 		}
 	}
 
-	Body *create_body(Vector3 position, Vector3 extent, float radius01, void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) {
-		Body *body = new Body(ctx, layer, is_static, is_trigger, mass);
+	Body *create_body(Vector3 position, Vector3 extent, float radius01, void *ctx, bool is_static, bool is_trigger, uint32_t layer, float mass) {
+		Body *body = new Body(ctx, is_static, is_trigger, layer, mass);
 		body->cube.apply(position, extent, radius01);
 		if (!is_static) {
 			dynamic_bodies.insert(body);
@@ -379,7 +377,8 @@ struct Space {
 			dynamic_bodies.erase(body);
 		}
 		body_count--;
-		delete body;
+		body->is_removed = true;
+		removed_bodies.insert(body);
 	}
 
 	Vector2i to_chunk(Vector3 position) const {
@@ -458,9 +457,9 @@ class CubePhysicsBody : public Node3D {
 
 	bool signal_enabled = false;
 
-	uint32_t layer = 0;
 	bool is_static = false;
 	bool is_trigger = false;
+	uint32_t layer = 0;
 	float mass = 1.0f;
 
 public:
@@ -488,14 +487,6 @@ public:
 		this->signal_enabled = signal_enabled;
 	}
 
-	uint32_t get_layer() const {
-		return this->layer;
-	}
-
-	void set_layer(uint32_t layer) {
-		this->layer = layer;
-	}
-
 	bool get_is_static() const {
 		return this->is_static;
 	}
@@ -510,6 +501,14 @@ public:
 
 	void set_is_trigger(bool is_trigger) {
 		this->is_trigger = is_trigger;
+	}
+
+	uint32_t get_layer() const {
+		return this->layer;
+	}
+
+	void set_layer(uint32_t layer) {
+		this->layer = layer;
 	}
 
 	float get_mass() const {

@@ -113,14 +113,18 @@ void Space::step(float delta) {
 	if (pair_added) {
 		for (const auto &[pair, info] : curr_pairs) {
 			if (!prev_pairs.has(pair)) {
-				pair_added(this, pair.a, pair.b, info.normal);
+				if (!pair.a->is_removed && !pair.b->is_removed) {
+					pair_added(this, pair.a, pair.b, info.normal);
+				}
 			}
 		}
 	}
 	if (pair_removed) {
 		for (const auto &[pair, info] : prev_pairs) {
 			if (!curr_pairs.has(pair)) {
-				pair_removed(this, pair.a, pair.b);
+				if (!pair.a->is_removed && !pair.b->is_removed) {
+					pair_removed(this, pair.a, pair.b);
+				}
 			}
 		}
 	}
@@ -139,6 +143,12 @@ void Space::step(float delta) {
 		body->cube.move(total_vel * delta);
 		update_body_chunk(body);
 	}
+
+	// delete removed bodies
+	for (Body *body : removed_bodies) {
+		delete body;
+	}
+	removed_bodies.clear();
 }
 
 // godot Node
@@ -211,12 +221,13 @@ void CubePhysicsBody::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_radius01", "radius01"), &CubePhysicsBody::set_radius01);
 	ClassDB::bind_method(D_METHOD("get_signal_enabled"), &CubePhysicsBody::get_signal_enabled);
 	ClassDB::bind_method(D_METHOD("set_signal_enabled", "signal_enabled"), &CubePhysicsBody::set_signal_enabled);
-	ClassDB::bind_method(D_METHOD("get_layer"), &CubePhysicsBody::get_layer);
-	ClassDB::bind_method(D_METHOD("set_layer", "layer"), &CubePhysicsBody::set_layer);
+
 	ClassDB::bind_method(D_METHOD("get_is_static"), &CubePhysicsBody::get_is_static);
 	ClassDB::bind_method(D_METHOD("set_is_static", "is_static"), &CubePhysicsBody::set_is_static);
 	ClassDB::bind_method(D_METHOD("get_is_trigger"), &CubePhysicsBody::get_is_trigger);
 	ClassDB::bind_method(D_METHOD("set_is_trigger", "is_trigger"), &CubePhysicsBody::set_is_trigger);
+	ClassDB::bind_method(D_METHOD("get_layer"), &CubePhysicsBody::get_layer);
+	ClassDB::bind_method(D_METHOD("set_layer", "layer"), &CubePhysicsBody::set_layer);
 	ClassDB::bind_method(D_METHOD("get_mass"), &CubePhysicsBody::get_mass);
 	ClassDB::bind_method(D_METHOD("set_mass", "mass"), &CubePhysicsBody::set_mass);
 
@@ -229,9 +240,10 @@ void CubePhysicsBody::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "extent"), "set_extent", "get_extent");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius01", PROPERTY_HINT_RANGE, "0.0,1.0"), "set_radius01", "get_radius01");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "signal_enabled"), "set_signal_enabled", "get_signal_enabled");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "layer"), "set_layer", "get_layer");
+
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_static"), "set_is_static", "get_is_static");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_trigger"), "set_is_trigger", "get_is_trigger");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "layer"), "set_layer", "get_layer");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass"), "set_mass", "get_mass");
 
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "chunk_pos", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_pos");
@@ -252,7 +264,7 @@ void CubePhysicsBody::_enter_tree() {
 		ERR_PRINT("CubePhysicsBody must be a child of CubePhysicsSpace");
 		return;
 	}
-	body = space->create_body(get_global_position(), extent, radius01, this, layer, is_static, is_trigger, mass);
+	body = space->create_body(get_global_position(), extent, radius01, this, is_static, is_trigger, layer, mass);
 }
 
 void CubePhysicsBody::_exit_tree() {
