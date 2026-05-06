@@ -10,6 +10,7 @@ using namespace godot;
 struct Space;
 
 const float FLOAT_MAX = 1e9f;
+const float FLOAT_EPS = 1e-6f;
 const float PENETRATION_CORRECTION_PERCENTAGE = 0.2f;
 const Vector2i INVALID_CHUNK_POS = Vector2i(INT_MAX, INT_MAX);
 
@@ -31,14 +32,9 @@ struct UnitVector3 {
 };
 
 inline bool aabb_intersects(Vector3 vmin, Vector3 vmax, Vector3 other_vmin, Vector3 other_vmax) {
-	float sep_x1 = other_vmin.x - vmax.x;
-	float sep_x2 = vmin.x - other_vmax.x;
-	float sep_y1 = other_vmin.y - vmax.y;
-	float sep_y2 = vmin.y - other_vmax.y;
-	float sep_z1 = other_vmin.z - vmax.z;
-	float sep_z2 = vmin.z - other_vmax.z;
-
-	return sep_x1 < 0 && sep_x2 < 0 && sep_y1 < 0 && sep_y2 < 0 && sep_z1 < 0 && sep_z2 < 0;
+	return (other_vmin.x < vmax.x) && (vmin.x < other_vmax.x) &&
+			(other_vmin.y < vmax.y) && (vmin.y < other_vmax.y) &&
+			(other_vmin.z < vmax.z) && (vmin.z < other_vmax.z);
 }
 
 inline Vector3 project_point_on_line(Vector3 point, Line line) {
@@ -167,6 +163,14 @@ struct AABB {
 		return face;
 	}
 
+	void move_both_to_origin(AABB *p_other) {
+		Vector3 offset = vmin;
+		vmin -= offset;
+		vmax -= offset;
+		p_other->vmin -= offset;
+		p_other->vmax -= offset;
+	}
+
 	float find_max_separation(const AABB &other, UnitVector3 *p_reference_normal) const {
 		float sep_x1 = other.vmin.x - vmax.x;
 		float sep_x2 = vmin.x - other.vmax.x;
@@ -237,10 +241,11 @@ struct Body {
 	uint32_t layer;
 	bool is_static;
 	bool is_trigger;
+	bool signal_enabled;
 	float mass;
 
 	Body(void *ctx, uint32_t layer, bool is_static, bool is_trigger, float mass) :
-			prev(nullptr), next(nullptr), ctx(ctx), layer(layer), is_static(is_static), is_trigger(is_trigger), mass(mass) {
+			prev(nullptr), next(nullptr), ctx(ctx), layer(layer), is_static(is_static), is_trigger(is_trigger), signal_enabled(false), mass(mass) {
 		std::memset(&cube, 0, sizeof(Cube));
 		velocity.zero();
 		instant_velocity.zero();
@@ -296,7 +301,12 @@ struct Space {
 	HashMap<Vector2i, Body *> chunks;
 
 	HashSet<Body *> dynamic_bodies;
-	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> cached_pairs;
+
+	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> curr_pairs;
+	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> prev_pairs;
+
+	void (*pair_added)(Space* space, Body *a, Body *b, Vector3 normal);
+	void (*pair_removed)(Space* space, Body *a, Body *b);
 
 	Space(float chunk_size) {
 		this->chunk_size = chunk_size;
@@ -305,12 +315,14 @@ struct Space {
 		for (int i = 0; i < 32; i++) {
 			layer_masks[i] = 0xFFFFFFFF;
 		}
+		this->pair_added = nullptr;
+		this->pair_removed = nullptr;
 	}
 
-	void add_cached_pair(Body *a, Body *b, Vector3 normal, float max_sep) {
+	void add_curr_pair(Body *a, Body *b, Vector3 normal, float max_sep) {
 		CollisionPair pair(a, b);
-		if (!cached_pairs.has(pair)) {
-			cached_pairs.insert(pair, CollisionPair::Info{ normal, max_sep });
+		if (!curr_pairs.has(pair)) {
+			curr_pairs.insert(pair, CollisionPair::Info{ normal, max_sep });
 		}
 	}
 
@@ -380,7 +392,7 @@ struct Space {
 	// void ray_cast(Vector3 from, Vector3 to, float max_distance);
 	// void circle_cast(Vector3 center, float radius);
 	// void sphere_cast(Vector3 center, float radius);
-	// void cube_cast(AABB cube);
+	// void cube_cast(Vector3 vmin, Vector3 vmax);
 
 	void step(float delta);
 
@@ -465,6 +477,8 @@ class CubePhysicsBody : public Node3D {
 	Vector3 extent = Vector3(1, 1, 1);
 	float radius01 = 0.0f;
 
+	bool signal_enabled = false;
+
 	uint32_t layer = 0;
 	bool is_static = false;
 	bool is_trigger = false;
@@ -485,6 +499,14 @@ public:
 
 	void set_radius01(float radius01) {
 		this->radius01 = radius01;
+	}
+
+	bool get_signal_enabled() const {
+		return this->signal_enabled;
+	}
+
+	void set_signal_enabled(bool signal_enabled) {
+		this->signal_enabled = signal_enabled;
 	}
 
 	uint32_t get_layer() const {
@@ -530,6 +552,20 @@ public:
 	void set_velocity(Vector3 velocity) {
 		if (body) {
 			body->velocity = velocity;
+		}
+	}
+
+	Vector3 get_instant_velocity() const {
+		if (body) {
+			return body->instant_velocity;
+		} else {
+			return Vector3(0, 0, 0);
+		}
+	}
+
+	void set_instant_velocity(Vector3 instant_velocity) {
+		if (body) {
+			body->instant_velocity = instant_velocity;
 		}
 	}
 
