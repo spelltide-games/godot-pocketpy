@@ -305,8 +305,8 @@ struct Space {
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> curr_pairs;
 	HashMap<CollisionPair, CollisionPair::Info, CollisionPair::Hasher> prev_pairs;
 
-	void (*pair_added)(Space* space, Body *a, Body *b, Vector3 normal);
-	void (*pair_removed)(Space* space, Body *a, Body *b);
+	void (*pair_added)(Space *space, Body *a, Body *b, Vector3 normal);
+	void (*pair_removed)(Space *space, Body *a, Body *b);
 
 	Space(float chunk_size) {
 		this->chunk_size = chunk_size;
@@ -406,27 +406,6 @@ struct Space {
 			}
 		}
 	}
-};
-
-struct BroadPhaseIter {
-	Space *space;
-	AABB aabb;
-	uint32_t layer_mask;
-
-	Vector2i base_chunk_pos;
-	int chunk_index;
-	Body *candidate;
-
-	BroadPhaseIter(Space *space, const AABB &aabb, uint32_t layer_mask) {
-		this->space = space;
-		this->aabb = aabb;
-		this->layer_mask = layer_mask;
-		this->base_chunk_pos = space->to_chunk(aabb.position());
-		this->chunk_index = -1;
-		this->candidate = nullptr;
-	}
-
-	Body *next();
 };
 
 // godot Node

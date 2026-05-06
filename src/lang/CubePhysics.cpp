@@ -4,31 +4,22 @@
 
 namespace cube_physics {
 
-static const Vector2i DIR_9[9] = {
-	Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1),
-	Vector2i(-1, 0), Vector2i(0, 0), Vector2i(1, 0),
-	Vector2i(-1, 1), Vector2i(0, 1), Vector2i(1, 1)
-};
-
-Body *BroadPhaseIter::next() {
-	while (true) {
-		if (candidate) {
-			if (layer_mask & (1U << candidate->layer)) {
-				if (aabb.intersects(candidate->cube.aabb())) {
-					Body *retval = candidate;
+static void broad_phase_query(Space *space, const AABB &aabb, uint32_t layer_mask, void *ctx, void (*callback)(Space *space, Body *candidate, void *ctx)) {
+	for (int i = 0; i < 2; i++) {
+		for (int j = 0; j < 2; j++) {
+			Vector2i chunk_pos = space->to_chunk(aabb.position()) + Vector2i(i, j);
+			Body **p_candidates = space->chunks.getptr(chunk_pos);
+			if (p_candidates) {
+				Body *candidate = *p_candidates;
+				while (candidate) {
+					if (layer_mask & (1U << candidate->layer)) {
+						if (aabb.intersects(candidate->cube.aabb())) {
+							callback(space, candidate, ctx);
+						}
+					}
 					candidate = candidate->next;
-					return retval;
 				}
 			}
-			candidate = candidate->next;
-		} else {
-			chunk_index++;
-			if (chunk_index >= 9) {
-				return nullptr;
-			}
-			Vector2i chunk_pos = base_chunk_pos + DIR_9[chunk_index];
-			Body **p_candidates = space->chunks.getptr(chunk_pos);
-			candidate = p_candidates ? *p_candidates : nullptr;
 		}
 	}
 }
@@ -42,10 +33,12 @@ void Space::step(float delta) {
 			continue;
 		}
 
-		BroadPhaseIter iter(this, a->cube.aabb(), layer_masks[a->layer]);
-		while (Body *b = iter.next()) {
+		broad_phase_query(this, a->cube.aabb(), layer_masks[a->layer], (void *)a, [](Space *space, Body *candidate, void *ctx) {
+			Body *a = (Body *)ctx;
+			Body *b = candidate;
+
 			if (a == b) {
-				continue;
+				return;
 			}
 
 			// narrow phase
@@ -57,7 +50,7 @@ void Space::step(float delta) {
 			float max_sep = a_core.find_max_separation(b_core, &n);
 
 			if (max_sep < 0) {
-				add_curr_pair(a, b, n.to_vec3(), max_sep);
+				space->add_curr_pair(a, b, n.to_vec3(), max_sep);
 				// print_line("max_sep: " + rtos(max_sep) + ", n: " + n.to_vec3());
 			} else {
 				AAFace a_face = a_core.get_face(n.flip());
@@ -68,11 +61,11 @@ void Space::step(float delta) {
 				max_sep = n_alt_length - a->cube.radius - b->cube.radius;
 
 				if (max_sep < 0) {
-					add_curr_pair(a, b, n_alt / n_alt_length, max_sep);
+					space->add_curr_pair(a, b, n_alt / n_alt_length, max_sep);
 					// print_line("max_sep_alt: " + rtos(max_sep) + ", n_alt: " + n_alt);
 				}
 			}
-		}
+		});
 	}
 
 	// resolve collisions
@@ -139,6 +132,7 @@ void Space::step(float delta) {
 		if (!body->is_moving()) {
 			continue;
 		}
+
 		// body->velocity += this->gravity * delta;
 		Vector3 total_vel = body->velocity + body->instant_velocity;
 		body->instant_velocity.zero();
@@ -243,7 +237,7 @@ void CubePhysicsBody::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "chunk_pos", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_pos");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_velocity", "get_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "instant_velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_instant_velocity", "get_instant_velocity");
-	
+
 	// signal
 	ADD_SIGNAL(MethodInfo("body_entered", PropertyInfo(Variant::OBJECT, "other"), PropertyInfo(Variant::VECTOR3, "normal")));
 	ADD_SIGNAL(MethodInfo("body_exited", PropertyInfo(Variant::OBJECT, "other")));
