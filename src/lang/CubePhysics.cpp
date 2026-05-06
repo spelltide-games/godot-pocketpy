@@ -81,7 +81,7 @@ void Space::step(float delta) {
 		const float e = 1.0f; // restitution
 
 		// contact separation
-		Vector3 correction = n * -info.max_sep;
+		Vector3 correction = n * (-info.max_sep + PENETRATION_SLOP);
 		correction *= PENETRATION_CORRECTION_PERCENTAGE;
 		Vector3 v_bias = correction / delta;
 
@@ -153,16 +153,16 @@ void Space::step(float delta) {
 
 // godot Node
 void CubePhysicsSpace::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_chunk_size"), &CubePhysicsSpace::get_chunk_size);
-	ClassDB::bind_method(D_METHOD("set_chunk_size", "chunk_size"), &CubePhysicsSpace::set_chunk_size);
-	ClassDB::bind_method(D_METHOD("get_body_count"), &CubePhysicsSpace::get_body_count);
-	ClassDB::bind_method(D_METHOD("get_dynamic_body_count"), &CubePhysicsSpace::get_dynamic_body_count);
-	ClassDB::bind_method(D_METHOD("get_chunk_count"), &CubePhysicsSpace::get_chunk_count);
+	ClassDB::bind_method(D_METHOD("_get_chunk_size"), &CubePhysicsSpace::get_chunk_size);
+	ClassDB::bind_method(D_METHOD("_set_chunk_size", "chunk_size"), &CubePhysicsSpace::set_chunk_size);
+	ClassDB::bind_method(D_METHOD("_get_body_count"), &CubePhysicsSpace::get_body_count);
+	ClassDB::bind_method(D_METHOD("_get_dynamic_body_count"), &CubePhysicsSpace::get_dynamic_body_count);
+	ClassDB::bind_method(D_METHOD("_get_chunk_count"), &CubePhysicsSpace::get_chunk_count);
 
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "chunk_size"), "set_chunk_size", "get_chunk_size");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_body_count");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "dynamic_body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_dynamic_body_count");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "chunk_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_count");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "chunk_size"), "_set_chunk_size", "_get_chunk_size");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "_get_body_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "dynamic_body_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "_get_dynamic_body_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "chunk_count", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "_get_chunk_count");
 }
 
 void CubePhysicsSpace::_enter_tree() {
@@ -173,20 +173,20 @@ void CubePhysicsSpace::_enter_tree() {
 	space->pair_added = [](Space *space, Body *a, Body *b, Vector3 normal) {
 		CubePhysicsBody *a_node = static_cast<CubePhysicsBody *>(a->ctx);
 		CubePhysicsBody *b_node = static_cast<CubePhysicsBody *>(b->ctx);
-		if (a_node->get_signal_enabled()) {
+		if (a_node->is_signal_enabled()) {
 			a_node->emit_signal("body_entered", b_node, normal);
 		}
-		if (b_node->get_signal_enabled()) {
+		if (b_node->is_signal_enabled()) {
 			b_node->emit_signal("body_entered", a_node, -normal);
 		}
 	};
 	space->pair_removed = [](Space *space, Body *a, Body *b) {
 		CubePhysicsBody *a_node = static_cast<CubePhysicsBody *>(a->ctx);
 		CubePhysicsBody *b_node = static_cast<CubePhysicsBody *>(b->ctx);
-		if (a_node->get_signal_enabled()) {
+		if (a_node->is_signal_enabled()) {
 			a_node->emit_signal("body_exited", b_node);
 		}
-		if (b_node->get_signal_enabled()) {
+		if (b_node->is_signal_enabled()) {
 			b_node->emit_signal("body_exited", a_node);
 		}
 	};
@@ -215,40 +215,40 @@ void CubePhysicsSpace::_physics_process(double delta) {
 }
 
 void CubePhysicsBody::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_extent"), &CubePhysicsBody::get_extent);
-	ClassDB::bind_method(D_METHOD("get_radius01"), &CubePhysicsBody::get_radius01);
-	ClassDB::bind_method(D_METHOD("set_extent", "extent"), &CubePhysicsBody::set_extent);
-	ClassDB::bind_method(D_METHOD("set_radius01", "radius01"), &CubePhysicsBody::set_radius01);
-	ClassDB::bind_method(D_METHOD("get_signal_enabled"), &CubePhysicsBody::get_signal_enabled);
-	ClassDB::bind_method(D_METHOD("set_signal_enabled", "signal_enabled"), &CubePhysicsBody::set_signal_enabled);
+	ClassDB::bind_method(D_METHOD("_get_extent"), &CubePhysicsBody::get_extent);
+	ClassDB::bind_method(D_METHOD("_get_radius01"), &CubePhysicsBody::get_radius01);
+	ClassDB::bind_method(D_METHOD("_set_extent", "extent"), &CubePhysicsBody::set_extent);
+	ClassDB::bind_method(D_METHOD("_set_radius01", "radius01"), &CubePhysicsBody::set_radius01);
+	ClassDB::bind_method(D_METHOD("_is_signal_enabled"), &CubePhysicsBody::is_signal_enabled);
+	ClassDB::bind_method(D_METHOD("_set_signal_enabled", "signal_enabled"), &CubePhysicsBody::set_signal_enabled);
 
-	ClassDB::bind_method(D_METHOD("get_is_static"), &CubePhysicsBody::get_is_static);
-	ClassDB::bind_method(D_METHOD("set_is_static", "is_static"), &CubePhysicsBody::set_is_static);
-	ClassDB::bind_method(D_METHOD("get_is_trigger"), &CubePhysicsBody::get_is_trigger);
-	ClassDB::bind_method(D_METHOD("set_is_trigger", "is_trigger"), &CubePhysicsBody::set_is_trigger);
-	ClassDB::bind_method(D_METHOD("get_layer"), &CubePhysicsBody::get_layer);
-	ClassDB::bind_method(D_METHOD("set_layer", "layer"), &CubePhysicsBody::set_layer);
-	ClassDB::bind_method(D_METHOD("get_mass"), &CubePhysicsBody::get_mass);
-	ClassDB::bind_method(D_METHOD("set_mass", "mass"), &CubePhysicsBody::set_mass);
+	ClassDB::bind_method(D_METHOD("_is_static"), &CubePhysicsBody::is_static);
+	ClassDB::bind_method(D_METHOD("_set_static", "is_static"), &CubePhysicsBody::set_static);
+	ClassDB::bind_method(D_METHOD("_is_trigger"), &CubePhysicsBody::is_trigger);
+	ClassDB::bind_method(D_METHOD("_set_trigger", "is_trigger"), &CubePhysicsBody::set_trigger);
+	ClassDB::bind_method(D_METHOD("_get_layer"), &CubePhysicsBody::get_layer);
+	ClassDB::bind_method(D_METHOD("_set_layer", "layer"), &CubePhysicsBody::set_layer);
+	ClassDB::bind_method(D_METHOD("_get_mass"), &CubePhysicsBody::get_mass);
+	ClassDB::bind_method(D_METHOD("_set_mass", "mass"), &CubePhysicsBody::set_mass);
 
-	ClassDB::bind_method(D_METHOD("get_chunk_pos"), &CubePhysicsBody::get_chunk_pos);
-	ClassDB::bind_method(D_METHOD("get_velocity"), &CubePhysicsBody::get_velocity);
-	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &CubePhysicsBody::set_velocity);
-	ClassDB::bind_method(D_METHOD("get_instant_velocity"), &CubePhysicsBody::get_instant_velocity);
-	ClassDB::bind_method(D_METHOD("set_instant_velocity", "instant_velocity"), &CubePhysicsBody::set_instant_velocity);
+	ClassDB::bind_method(D_METHOD("_get_chunk_pos"), &CubePhysicsBody::get_chunk_pos);
+	ClassDB::bind_method(D_METHOD("_get_velocity"), &CubePhysicsBody::get_velocity);
+	ClassDB::bind_method(D_METHOD("_set_velocity", "velocity"), &CubePhysicsBody::set_velocity);
+	ClassDB::bind_method(D_METHOD("_get_instant_velocity"), &CubePhysicsBody::get_instant_velocity);
+	ClassDB::bind_method(D_METHOD("_set_instant_velocity", "instant_velocity"), &CubePhysicsBody::set_instant_velocity);
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "extent"), "set_extent", "get_extent");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius01", PROPERTY_HINT_RANGE, "0.0,1.0"), "set_radius01", "get_radius01");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "signal_enabled"), "set_signal_enabled", "get_signal_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "extent"), "_set_extent", "_get_extent");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "radius01", PROPERTY_HINT_RANGE, "0.0,1.0"), "_set_radius01", "_get_radius01");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_signal_enabled"), "_set_signal_enabled", "_is_signal_enabled");
 
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_static"), "set_is_static", "get_is_static");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_trigger"), "set_is_trigger", "get_is_trigger");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "layer"), "set_layer", "get_layer");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass"), "set_mass", "get_mass");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_static"), "_set_static", "_is_static");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_trigger"), "_set_trigger", "_is_trigger");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "layer"), "_set_layer", "_get_layer");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass"), "_set_mass", "_get_mass");
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "chunk_pos", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "get_chunk_pos");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_velocity", "get_velocity");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "instant_velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "set_instant_velocity", "get_instant_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "chunk_pos", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_READ_ONLY), "", "_get_chunk_pos");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "_set_velocity", "_get_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "instant_velocity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "_set_instant_velocity", "_get_instant_velocity");
 
 	// signal
 	ADD_SIGNAL(MethodInfo("body_entered", PropertyInfo(Variant::OBJECT, "other"), PropertyInfo(Variant::VECTOR3, "normal")));
@@ -264,7 +264,7 @@ void CubePhysicsBody::_enter_tree() {
 		ERR_PRINT("CubePhysicsBody must be a child of CubePhysicsSpace");
 		return;
 	}
-	body = space->create_body(get_global_position(), extent, radius01, this, is_static, is_trigger, layer, mass);
+	body = space->create_body(get_global_position(), extent, radius01, this, _is_static, _is_trigger, _layer, _mass);
 }
 
 void CubePhysicsBody::_exit_tree() {

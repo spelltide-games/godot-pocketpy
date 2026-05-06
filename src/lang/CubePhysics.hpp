@@ -10,8 +10,9 @@ using namespace godot;
 struct Space;
 
 const float FLOAT_MAX = 1e9f;
-const float FLOAT_EPS = 1e-6f;
+const float FLOAT_EPS = 1.19209290e-7f;
 const float PENETRATION_CORRECTION_PERCENTAGE = 0.2f;
+const float PENETRATION_SLOP = FLOAT_EPS;
 const Vector2i INVALID_CHUNK_POS = Vector2i(INT_MAX, INT_MAX);
 
 using Line = Vector3[2];
@@ -455,12 +456,12 @@ class CubePhysicsBody : public Node3D {
 	Vector3 extent = Vector3(1, 1, 1);
 	float radius01 = 0.0f;
 
-	bool signal_enabled = false;
+	bool _is_signal_enabled = false;
 
-	bool is_static = false;
-	bool is_trigger = false;
-	uint32_t layer = 0;
-	float mass = 1.0f;
+	bool _is_static = false;
+	bool _is_trigger = false;
+	uint32_t _layer = 0;
+	float _mass = 1.0f;
 
 public:
 	Vector3 get_extent() const {
@@ -479,44 +480,44 @@ public:
 		this->radius01 = radius01;
 	}
 
-	bool get_signal_enabled() const {
-		return this->signal_enabled;
+	bool is_signal_enabled() const {
+		return this->_is_signal_enabled;
 	}
 
 	void set_signal_enabled(bool signal_enabled) {
-		this->signal_enabled = signal_enabled;
+		this->_is_signal_enabled = signal_enabled;
 	}
 
-	bool get_is_static() const {
-		return this->is_static;
+	bool is_static() const {
+		return this->_is_static;
 	}
 
-	void set_is_static(bool is_static) {
-		this->is_static = is_static;
+	void set_static(bool is_static) {
+		this->_is_static = is_static;
 	}
 
-	bool get_is_trigger() const {
-		return this->is_trigger;
+	bool is_trigger() const {
+		return this->_is_trigger;
 	}
 
-	void set_is_trigger(bool is_trigger) {
-		this->is_trigger = is_trigger;
+	void set_trigger(bool is_trigger) {
+		this->_is_trigger = is_trigger;
 	}
 
 	uint32_t get_layer() const {
-		return this->layer;
+		return this->_layer;
 	}
 
 	void set_layer(uint32_t layer) {
-		this->layer = layer;
+		this->_layer = layer;
 	}
 
 	float get_mass() const {
-		return this->mass;
+		return this->_mass;
 	}
 
 	void set_mass(float mass) {
-		this->mass = mass;
+		this->_mass = mass;
 	}
 
 	Vector3 get_velocity() const {

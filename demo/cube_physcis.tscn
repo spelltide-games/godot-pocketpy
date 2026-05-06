@@ -32,9 +32,10 @@ script = ExtResource("1_upmpt")
 
 [node name="a" type="CubePhysicsBody" parent="CubePhysicsSpace" unique_id=1155890929]
 radius01 = 0.5
-signal_enabled = true
+is_signal_enabled = true
 script = ExtResource("1_upmpt")
 init_vel = Vector3(2, 0, 2)
+is_input_enabled = true
 
 [node name="b" type="CubePhysicsBody" parent="CubePhysicsSpace" unique_id=138621795]
 radius01 = 0.5

@@ -2,6 +2,7 @@
 extends CubePhysicsBody
 
 @export var init_vel: Vector3
+@export var is_input_enabled: bool
 
 class Cube:
 	var vmin: Vector3
@@ -47,12 +48,20 @@ func _ready() -> void:
 		body_exited.connect(_on_body_exited)
 
 func _on_body_entered(other: CubePhysicsBody, normal: Vector3):
-	print('body_enter: ', self.name + ' -> ' + other.name, ' (', normal)
+	print('body_enter:  ', self.name + ' -> ' + other.name, ' (', normal)
 
 func _on_body_exited(other: CubePhysicsBody):
-	print('body_exited:', self.name + ' -> ' + other.name)
+	print('body_exited: ', self.name + ' -> ' + other.name)
 
-func _process(_delta: float) -> void:
+func process_user_input(delta: float):
+	var h = Input.get_axis("ui_left", "ui_right")
+	var v = Input.get_axis("ui_up", "ui_down")
+	velocity = Vector3(h, 0, v) * 5
+
+func _process(delta: float) -> void:
+	if is_input_enabled:
+		process_user_input(delta)
+
 	var cube = Cube.new()
 	cube.radius = radius01 * extent[extent.min_axis_index()]
 	cube.vmin = global_position - (extent - Vector3.ONE * cube.radius)
