@@ -93,3 +93,48 @@ func _process(delta: float) -> void:
 				ImmediateGizmos3D.line_arc(center, Vector3(0, 0, x_sign * y_sign), dx, PI / 2)
 				ImmediateGizmos3D.line_arc(center, Vector3(y_sign * z_sign, 0, 0), dy, PI / 2)
 				ImmediateGizmos3D.line_arc(center, Vector3(0, x_sign * z_sign, 0), dz, PI / 2)
+	
+	# 绘制精细线框
+	return
+	ImmediateGizmos3D.set_color(Color.GRAY)
+	var segments_y = 10 # 竖向切分层
+	var corner_res = 8  # 圆角精细度
+	
+	# 计算物体上下边界
+	var min_y = cube.vmin.y - cube.radius
+	var max_y = cube.vmax.y + cube.radius
+
+	for i in range(segments_y + 1):
+		var t = float(i) / segments_y
+		var curr_y = lerpf(min_y, max_y, t)
+
+		# 计算当前高度相对于核心方块的垂直偏移
+		var dy = 0.0
+		if curr_y < cube.vmin.y:
+			dy = cube.vmin.y - curr_y 
+		elif curr_y > cube.vmax.y:
+			dy = curr_y - cube.vmax.y 
+
+		# 勾股定理算半径
+		var r = sqrt(max(0.0, cube.radius**2 - dy**2))
+		var loop_points = PackedVector3Array()
+
+		# 按四个象限依次收集圆弧顶点
+		# 第一象限 (+X, +Z)
+		for j in range(corner_res + 1):
+			var ang = float(j) / corner_res * (PI / 2.0)
+			loop_points.append(Vector3(cube.vmax.x + r * sin(ang), curr_y, cube.vmax.z + r * cos(ang)))
+		# 第二象限 (+X, -Z)
+		for j in range(corner_res + 1):
+			var ang = PI / 2.0 + float(j) / corner_res * (PI / 2.0)
+			loop_points.append(Vector3(cube.vmax.x + r * sin(ang), curr_y, cube.vmin.z + r * cos(ang)))
+		# 第三象限 (-X, -Z)
+		for j in range(corner_res + 1):
+			var ang = PI + float(j) / corner_res * (PI / 2.0)
+			loop_points.append(Vector3(cube.vmin.x + r * sin(ang), curr_y, cube.vmin.z + r * cos(ang)))
+		# 第四象限 (-X, +Z)
+		for j in range(corner_res + 1):
+			var ang = 3.0 * PI / 2.0 + float(j) / corner_res * (PI / 2.0)
+			loop_points.append(Vector3(cube.vmin.x + r * sin(ang), curr_y, cube.vmax.z + r * cos(ang)))
+
+		ImmediateGizmos3D.line_polygon(loop_points)
