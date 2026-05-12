@@ -5,6 +5,3 @@
 	path = godot-cpp
 	url = https://github.com/godotengine/godot-cpp.git
 	branch = 4.4
-[submodule "leveldb"]
-	path = sbx_extension/leveldb
-	url = https://github.com/google/leveldb.git
