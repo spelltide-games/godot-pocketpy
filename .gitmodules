@@ -5,3 +5,6 @@
 	path = godot-cpp
 	url = https://github.com/godotengine/godot-cpp.git
 	branch = 4.4
+[submodule "sbx_extension"]
+	path = sbx_extension
+	url = https://github.com/spelltide-games/sbx_extension
