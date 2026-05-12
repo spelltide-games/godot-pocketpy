@@ -12,7 +12,7 @@
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
 
-#include "lang/CubePhysics.hpp"
+#include "sbx.hpp"
 
 using namespace godot;
 using namespace pkpy;
@@ -35,9 +35,8 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 		printf("==> pocketpy initialized.\n");
 
-		// cube physics
-		ClassDB::register_class<cube_physics::CubePhysicsSpace>();
-		ClassDB::register_class<cube_physics::CubePhysicsBody>();
+		setup_sbx_godot_classes();
+		
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		ClassDB::register_class<PythonEditorPlugin>();
 		EditorPlugins::add_by_type<PythonEditorPlugin>();

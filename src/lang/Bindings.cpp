@@ -1,6 +1,5 @@
 #include "Bindings.hpp"
 #include "PythonScriptInstance.hpp"
-#include "LevelDB.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/file_access.hpp>
@@ -8,6 +7,8 @@
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/callable.hpp>
+
+#include "sbx.hpp"
 
 namespace pkpy {
 
@@ -420,7 +421,7 @@ void setup_python_bindings() {
 
 	setup_awaitables();
 
-	setup_leveldb_module();
+	setup_sbx_python_modules();
 
 	printf("==> setup_python_bindings() done!\n");
 }

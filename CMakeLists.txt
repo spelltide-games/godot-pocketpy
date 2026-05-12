@@ -70,31 +70,11 @@ if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
 endif()
 
-# Fetch a list of the xml files to use for documentation and add to our target
-file(GLOB_RECURSE DOC_XML LIST_DIRECTORIES NO CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/doc_classes/*.xml")
-
-# conditionally add doc data to compile output
-if(DOC_XML)
-    if(GODOTCPP_TARGET MATCHES "editor|template_debug")
-        target_doc_sources(${LIBNAME} ${DOC_XML})
-    endif()
-endif()
-
-include_directories(SYSTEM ${CMAKE_CURRENT_LIST_DIR}/src/system)
-option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
-option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
-option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
-set(HAVE_CRC32C "" CACHE INTERNAL OFF)
-set(HAVE_SNAPPY "" CACHE INTERNAL OFF)
-set(HAVE_ZSTD "" CACHE INTERNAL OFF)
-set(HAVE_TCMALLOC "" CACHE INTERNAL OFF)
-add_subdirectory(leveldb)
-target_compile_definitions(leveldb PUBLIC -DHAVE_SNAPPY=1)
-target_link_libraries(leveldb lz4)
+add_subdirectory(sbx_extension)
 
 target_link_libraries(${LIBNAME} PRIVATE godot-cpp)
-target_link_libraries(${LIBNAME} PRIVATE leveldb)
 target_link_libraries(${LIBNAME} PRIVATE pocketpy)
+target_link_libraries(${LIBNAME} PRIVATE sbx_extension)
 
 set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}")
 

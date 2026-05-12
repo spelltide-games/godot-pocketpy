@@ -6,4 +6,5 @@
 -xc++
 -std=c++17
 -Ipocketpy/include
--Ileveldb/include
+-Isbx_extension/leveldb/include
+-Isbx_extension/include
