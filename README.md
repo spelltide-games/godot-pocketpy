@@ -46,8 +46,12 @@ To generate the stub files, run:
 python -m stubgen
 ```
 
-To build the project, run:
+To build the project in debug mode, run:
 
 ```
 python build.py
 ```
+
+To test the debug build, you need to open `demo/addons/godot-pocketpy/godot-pocketpy.gdextension`,
+find your platform and replace `template_release` with `template_debug`.
+In this way, the Godot Editor can load the debug version of the extension.
