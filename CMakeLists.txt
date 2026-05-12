@@ -72,9 +72,11 @@ endif()
 
 add_subdirectory(sbx_extension)
 
-target_link_libraries(${LIBNAME} PRIVATE godot-cpp)
-target_link_libraries(${LIBNAME} PRIVATE pocketpy)
-target_link_libraries(${LIBNAME} PRIVATE sbx_extension)
+target_link_libraries(${LIBNAME} PRIVATE
+    godot-cpp
+    pocketpy
+    sbx_extension
+)
 
 set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}")
 
@@ -87,5 +89,10 @@ set_target_properties(${LIBNAME}
 )
 
 add_custom_command(TARGET ${LIBNAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${LIBNAME}>" "${GODOT_PROJECT_BINARY_DIR}/$<TARGET_FILE_NAME:${LIBNAME}>"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GODOT_PROJECT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E echo "Copying $<TARGET_FILE_NAME:${LIBNAME}> to ${GODOT_PROJECT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:${LIBNAME}>"
+            "${GODOT_PROJECT_BINARY_DIR}/$<TARGET_FILE_NAME:${LIBNAME}>"
+    COMMENT "POST_BUILD begin for ${LIBNAME}"
 )
