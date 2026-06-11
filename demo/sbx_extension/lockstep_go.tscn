@@ -6,4 +6,4 @@
 
 [node name="LockstepGoClient" type="LockstepGoClient" parent="." unique_id=587941887]
 script = ExtResource("1_yssjf")
-smooth_frames = 4
+smooth_frames = 1

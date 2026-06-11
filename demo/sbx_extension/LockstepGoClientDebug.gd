@@ -15,9 +15,9 @@ func _ready():
 	
 	await connect_ws(host, port)
 	print(id)
-	var res = await create_room('test_room', '1.0', 4, 20)
+	var res = await create_room('1.0', 4, 20)
 	if res['error'] == 0:
-		await connect_room(res['room'])
+		await connect_room(res['retval'])
 		print(room)
 		_leaky_bucket = LeakyBucket.new(room['frame_rate'], smooth_frames)
 		print_latency()
@@ -127,7 +127,6 @@ class LeakyBucket:
 	var buf: Array
 	var curr_fps: float
 	var accum_time: float
-	var history: SlidingWindow
 
 	func _init(p_ideal_fps: int, p_ideal_buf_size: int):
 		ideal_fps = p_ideal_fps
@@ -137,17 +136,16 @@ class LeakyBucket:
 		buf = []
 		curr_fps = 0.0
 		accum_time = 0.0
-		history = SlidingWindow.new(10)
 	
 	func add_frame(inputs: Dictionary):
 		buf.append(inputs)
 		
 	func update_fps():
 		var diff = ideal_buf_size - buf.size()
-		var factor = 0.03
-		if diff > 1:
+		var factor = 0.05
+		if diff > 0:
 			curr_fps = lerpf(curr_fps, min_fps, factor)
-		elif diff < -1:
+		elif diff < 0:
 			curr_fps = lerpf(curr_fps, max_fps, factor)
 		else:
 			curr_fps = lerpf(curr_fps, ideal_fps, factor)
