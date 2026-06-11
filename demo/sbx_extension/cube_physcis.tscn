@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://hhb2ntl7222a"]
 
-[ext_resource type="Script" uid="uid://b7blmo0lje63g" path="res://CubePhysicsBodyDebug.gd" id="1_upmpt"]
+[ext_resource type="Script" uid="uid://b7blmo0lje63g" path="res://sbx_extension/CubePhysicsBodyDebug.gd" id="1_upmpt"]
 
 [node name="CubePhyscis" type="Node3D" unique_id=272191968]
 

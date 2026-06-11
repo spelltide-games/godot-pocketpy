@@ -6,5 +6,7 @@
 -xc++
 -std=c++17
 -Ipocketpy/include
+-Ipocketpy/3rd/msgpack/include
 -Isbx_extension/leveldb/include
+-Isbx_extension/kcp
 -Isbx_extension/include

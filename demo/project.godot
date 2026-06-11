@@ -19,6 +19,10 @@ run/main_scene="uid://tudbnvddbxp6"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
+[debug]
+
+gdscript/warnings/integer_division=0
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/immediate_gizmos/plugin.cfg")

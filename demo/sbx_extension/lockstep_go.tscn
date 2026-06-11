@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://wr530ul5mu41"]
+
+[ext_resource type="Script" uid="uid://doebtigfx1v0w" path="res://sbx_extension/LockstepGoClientDebug.gd" id="1_yssjf"]
+
+[node name="LockstepGo" type="Node2D" unique_id=1881269512]
+
+[node name="LockstepGoClient" type="LockstepGoClient" parent="." unique_id=587941887]
+script = ExtResource("1_yssjf")
+smooth_frames = 4
