@@ -40,3 +40,4 @@ __pycache__/
 .cursorignore
 typings/
 src/lang/BindingsGenerated.cpp
+.DS_Store
