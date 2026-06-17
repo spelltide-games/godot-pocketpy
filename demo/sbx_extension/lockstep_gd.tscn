@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://wr530ul5mu41"]
 
-[ext_resource type="Script" uid="uid://doebtigfx1v0w" path="res://sbx_extension/LockstepGoClientDebug.gd" id="1_yssjf"]
-[ext_resource type="PackedScene" uid="uid://cjx24tlc3b74n" path="res://sbx_extension/prefabs/h_slider.tscn" id="2_8svwq"]
+[ext_resource type="Script" uid="uid://doebtigfx1v0w" path="res://sbx_extension/LockstepGoClientDebug.gd" id="1_nt626"]
+[ext_resource type="PackedScene" uid="uid://cjx24tlc3b74n" path="res://sbx_extension/prefabs/h_slider.tscn" id="2_hj17r"]
 
 [sub_resource type="GDScript" id="GDScript_yssjf"]
 script/source = "extends Node2D
@@ -10,20 +10,20 @@ func _ready() -> void:
 	Engine.max_fps = 60
 "
 
-[node name="LockstepGo" type="Node2D" unique_id=1881269512]
+[node name="Lockstep" type="Node2D" unique_id=1881269512]
 script = SubResource("GDScript_yssjf")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1564664147]
 
 [node name="P1" type="LockstepGoClient" parent="CanvasLayer" unique_id=1429211835]
-script = ExtResource("1_yssjf")
+script = ExtResource("1_nt626")
 is_host_player = true
 
 [node name="P1" type="Control" parent="CanvasLayer/P1" unique_id=2102030116]
 layout_mode = 3
 anchors_preset = 0
 
-[node name="HSlider" parent="CanvasLayer/P1/P1" unique_id=1564160547 instance=ExtResource("2_8svwq")]
+[node name="HSlider" parent="CanvasLayer/P1/P1" unique_id=1564160547 instance=ExtResource("2_hj17r")]
 layout_mode = 0
 offset_left = 0.0
 offset_top = 0.0
@@ -36,7 +36,7 @@ anchors_preset = 0
 offset_top = 115.0
 offset_bottom = 115.0
 
-[node name="HSlider" parent="CanvasLayer/P1/P2" unique_id=801721688 instance=ExtResource("2_8svwq")]
+[node name="HSlider" parent="CanvasLayer/P1/P2" unique_id=801721688 instance=ExtResource("2_hj17r")]
 layout_mode = 0
 offset_left = 0.0
 offset_top = 0.0
