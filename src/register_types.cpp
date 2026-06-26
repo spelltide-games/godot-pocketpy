@@ -35,7 +35,7 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 		printf("==> pocketpy initialized.\n");
 
-		setup_sbx_godot_classes();
+		sbx::setup_sbx_godot_classes();
 		
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		ClassDB::register_class<PythonEditorPlugin>();

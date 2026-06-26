@@ -421,7 +421,7 @@ void setup_python_bindings() {
 
 	setup_awaitables();
 
-	setup_sbx_python_modules();
+	sbx::setup_sbx_python_modules();
 
 	printf("==> setup_python_bindings() done!\n");
 }
