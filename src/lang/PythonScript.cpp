@@ -390,6 +390,7 @@ Variant PythonScript::_new(const Variant **args, GDExtensionInt arg_count, GDExt
 
 void PythonScript::_bind_methods() {
 	ClassDB::bind_vararg_method(METHOD_FLAGS_DEFAULT, "new", &PythonScript::_new);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("eval", "code"), &PythonScript::eval);
 }
 
 String PythonScript::_to_string() const {

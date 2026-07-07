@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="godot-pocketpy"
-run/main_scene="uid://tudbnvddbxp6"
+run/main_scene="uid://hhb2ntl7222a"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 

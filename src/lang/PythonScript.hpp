@@ -1,7 +1,7 @@
 #pragma once
 
-#include "godot_cpp/variant/packed_string_array.hpp"
 #include "godot_cpp/classes/gd_script.hpp"
+#include "godot_cpp/variant/packed_string_array.hpp"
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
@@ -84,6 +84,16 @@ public:
 
 	PythonScriptMeta meta;
 
+	static Variant eval(String code) {
+		py_StackRef p0 = py_peek(0);
+		bool ok = py_eval(code.utf8().get_data(), NULL);
+		if (!ok) {
+			log_python_error_and_clearexc(p0);
+			return Variant();
+		}
+		return py_tovariant(py_retval());
+	}
+
 	static void rebuild_index_file();
 	static HashMap<py_Type, PythonScript *> runtime_type_to_script;
 
@@ -107,7 +117,6 @@ protected:
 
 private:
 	static HashMap<StringName, String> known_classes;
-	
 };
 
 } //namespace pkpy

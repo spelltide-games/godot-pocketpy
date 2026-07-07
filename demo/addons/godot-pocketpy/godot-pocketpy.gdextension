@@ -14,8 +14,8 @@ macos.arm64.release = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.
 ios.arm64.debug = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
 ios.arm64.release = "bin/ios/libgodot-pocketpy.ios.template_release.arm64.dylib"
 
-windows.x86_64.debug = "bin/windows/godot-pocketpy.windows.template_release.x86_64.dll"
-windows.x86_64.release = "bin/windows/godot-pocketpy.windows.template_release.x86_64.dll"
+windows.x86_64.debug = "bin/windows/godot-pocketpy.windows.template_debug.x86_64.dll"
+windows.x86_64.release = "bin/windows/godot-pocketpy.windows.template_debug.x86_64.dll"
 
 android.arm64.debug = "bin/android/libgodot-pocketpy.android.template_release.arm64.so"
 android.arm64.release = "bin/android/libgodot-pocketpy.android.template_release.arm64.so"
