@@ -23,6 +23,11 @@ config/icon="res://icon.svg"
 
 gdscript/warnings/integer_division=0
 
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/immediate_gizmos/plugin.cfg")
