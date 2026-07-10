@@ -34,6 +34,14 @@ func _physics_process(_delta: float) -> void:
 		#print('FPS: ', Engine.get_frames_per_second())
 "
 
+[sub_resource type="GDScript" id="GDScript_yt4do"]
+script/source = "extends Label
+
+func _physics_process(delta: float) -> void:
+	var s = '__import__(\"sbx\").playground.instance.debug_info()'
+	text = PythonScript.eval(s) as String
+"
+
 [node name="SpaceTest" type="Node3D" unique_id=272191968]
 script = SubResource("GDScript_k0hn8")
 
@@ -43,3 +51,27 @@ script = SubResource("GDScript_7ngx2")
 [node name="Camera3D" type="Camera3D" parent="." unique_id=343441278]
 transform = Transform3D(1, 0, 0, 0, 0.1782012, 0.98399407, 0, -0.98399407, 0.1782012, 1.4456718, 7.869521, 2.7572842)
 current = true
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1421639761]
+
+[node name="Panel" type="Panel" parent="CanvasLayer" unique_id=1282985620]
+offset_right = 310.0
+offset_bottom = 289.0
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/Panel" unique_id=1996905905]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Label" type="Label" parent="CanvasLayer/Panel/MarginContainer" unique_id=1982470312]
+layout_mode = 2
+size_flags_vertical = 1
+text = "f"
+script = SubResource("GDScript_yt4do")
