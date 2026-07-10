@@ -59,8 +59,9 @@ current = true
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1421639761]
 
 [node name="Panel" type="Panel" parent="CanvasLayer" unique_id=1282985620]
-offset_right = 310.0
-offset_bottom = 289.0
+self_modulate = Color(1, 1, 1, 0.47058824)
+offset_right = 467.0
+offset_bottom = 159.0
 
 [node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/Panel" unique_id=1996905905]
 layout_mode = 1
@@ -77,5 +78,6 @@ theme_override_constants/margin_bottom = 8
 [node name="Label" type="Label" parent="CanvasLayer/Panel/MarginContainer" unique_id=1982470312]
 layout_mode = 2
 size_flags_vertical = 1
+theme_override_font_sizes/font_size = 24
 text = "f"
 script = SubResource("GDScript_yt4do")
