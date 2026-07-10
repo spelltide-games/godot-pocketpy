@@ -168,7 +168,8 @@ void py_newvariant(py_OutRef out, const Variant *val) {
 }
 
 Variant to_variant_exact(py_Ref val) {
-	assert(py_istype(val, pyctx()->tp_Variant));
+	bool is_convertible = py_istype(val, pyctx()->tp_Variant);
+	ERR_FAIL_COND_V(!is_convertible, Variant());
 	switch (val->extra) {
 		case Variant::VECTOR2: {
 			return *(Vector2 *)py_totrivial(val);

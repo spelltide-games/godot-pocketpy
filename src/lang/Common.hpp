@@ -172,18 +172,6 @@ struct SignalStatement : DefineStatement {
 
 PythonContext *pyctx();
 
-// struct PythonContextLock {
-// 	PythonContextLock() {
-// 		while (pyctx()->lock.test_and_set()) {
-// 			std::this_thread::yield();
-// 		}
-// 	}
-
-// 	~PythonContextLock() {
-// 		pyctx()->lock.clear();
-// 	}
-// };
-
 inline py_Name godot_name_to_python(StringName name) {
 	const py_Name &retval = (const py_Name &)name;
 	return retval;
