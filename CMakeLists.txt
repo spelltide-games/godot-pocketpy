@@ -68,6 +68,11 @@ target_sources(${LIBNAME}
 if(NOT MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
+else()
+    add_compile_options(/wd4244)
+    add_compile_options(/wd4267)
+    add_compile_options(/wd4305)
+    add_compile_options(/wd4996)
 endif()
 
 add_subdirectory(sbx_extension)
