@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/utility_functions.hpp>
 
 #include "sbx.hpp"
 
@@ -190,7 +191,6 @@ static void setup_exports() {
 
 void setup_python_bindings() {
 	pyctx()->main_thread_id = std::this_thread::get_id();
-	// pyctx()->lock.clear();
 	pyctx()->names.__init__ = py_name("__init__");
 	pyctx()->names.__name__ = py_name("__name__");
 	pyctx()->names.__call__ = py_name("__call__");
@@ -257,6 +257,24 @@ void setup_python_bindings() {
 			return TypeError("cast(): !godot_isinstance_one");
 		}
 		py_assign(py_retval(), py_arg(0));
+		return true;
+	});
+
+	// var_to_bytes
+	py_bindfunc(godot, "var_to_bytes", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		Variant v = py_tovariant(&argv[0]);
+		Variant res = UtilityFunctions::var_to_bytes(v);
+		py_newvariant(py_retval(), &res);
+		return true;
+	});
+
+	// bytes_to_var
+	py_bindfunc(godot, "bytes_to_var", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		Variant v = py_tovariant(&argv[0]);
+		Variant res = UtilityFunctions::bytes_to_var(v);
+		py_newvariant(py_retval(), &res);
 		return true;
 	});
 
