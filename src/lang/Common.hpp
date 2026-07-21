@@ -191,4 +191,6 @@ Variant py_tovariant(py_Ref val);
 Variant to_variant_exact(py_Ref val);
 void dispose_contexts();
 
+py_Type get_Variant_type();
+
 } // namespace pkpy

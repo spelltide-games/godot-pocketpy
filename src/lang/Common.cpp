@@ -284,4 +284,8 @@ void log_python_error_and_clearexc(py_StackRef p0) {
 	py_clearexc(p0);
 }
 
+py_Type get_Variant_type() {
+	return pyctx()->tp_Variant;
+}
+
 } // namespace pkpy
