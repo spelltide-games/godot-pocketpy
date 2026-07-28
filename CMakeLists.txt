@@ -4,8 +4,14 @@ cmake_minimum_required(VERSION 3.17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Build pocketpy
-option(PK_ENABLE_CUSTOM_SNAME "" ON)
+option(PK_ENABLE_OS "" OFF)
+option(PK_ENABLE_THREADS "" OFF)
 option(PK_ENABLE_DLL "" OFF)
+option(PK_ENABLE_DETERMINISM "" ON)
+option(PK_ENABLE_WATCHDOG "" OFF)
+option(PK_ENABLE_CUSTOM_SNAME "" ON)
+option(PK_ENABLE_MIMALLOC "" OFF)
+
 option(PK_BUILD_STATIC_LIB "" ON)
 option(PK_BUILD_MODULE_LZ4 "" ON)
 option(PK_BUILD_MODULE_CUTE_PNG "" ON)
