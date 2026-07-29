@@ -142,8 +142,6 @@ Error PythonScript::_reload(bool keep_state) {
 		return ERR_UNAVAILABLE;
 	}
 
-	// PythonContextLock lock;
-
 	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
 	PythonScriptMeta new_meta;
@@ -159,9 +157,9 @@ Error PythonScript::_reload(bool keep_state) {
 	auto module_path_cstr = module_path.utf8();
 	ctx->class_name = StringName(basename);
 
-	if(known_classes.has(ctx->class_name)){
+	if (known_classes.has(ctx->class_name)) {
 		String old_path = known_classes[ctx->class_name];
-		if(old_path != get_path()){
+		if (old_path != get_path()) {
 			ERR_PRINT("Duplicate class name: " + String(ctx->class_name) + " has been defined in both " + old_path + " and " + get_path());
 			return ERR_COMPILATION_FAILED;
 		}
@@ -217,6 +215,11 @@ Error PythonScript::_reload(bool keep_state) {
 
 	defines.sort();
 
+	if (ctx->extends.is_empty()) {
+		ERR_PRINT("Failed to find base class for " + get_path());
+		return ERR_COMPILATION_FAILED;
+	}
+
 	PackedStringArray buffer;
 	buffer.push_back("# " + get_path());
 	buffer.push_back("extends " + ctx->extends);
@@ -252,7 +255,7 @@ Error PythonScript::_reload(bool keep_state) {
 	placeholder_fallback_enabled = false;
 
 	known_classes[ctx->class_name] = get_path();
-	if(!Engine::get_singleton()->is_editor_hint()){
+	if (!Engine::get_singleton()->is_editor_hint()) {
 		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
 		runtime_type_to_script[exposed_type] = this;
 	}
@@ -448,20 +451,20 @@ HashMap<StringName, String> PythonScript::known_classes;
 HashMap<py_Type, PythonScript *> PythonScript::runtime_type_to_script;
 
 void PythonScript::rebuild_index_file() {
-	if(!Engine::get_singleton()->is_editor_hint()){
+	if (!Engine::get_singleton()->is_editor_hint()) {
 		return;
 	}
 	String index_path = "res://addons/godot-pocketpy/typings/godot/scripts.pyi";
 	print_line("=> Rebuilding Python script index file: " + index_path);
 	Ref<FileAccess> file = FileAccess::open(index_path, FileAccess::WRITE);
-	if(!file.is_valid() || !file->is_open()) {
+	if (!file.is_valid() || !file->is_open()) {
 		ERR_PRINT("Failed to open index file for writing: " + index_path);
 		return;
 	}
 	for (const auto &it : known_classes) {
 		StringName class_name = it.key;
 		String path = it.value;
-		if(!path.begins_with("res://") || !path.ends_with(".py")){
+		if (!path.begins_with("res://") || !path.ends_with(".py")) {
 			WARN_PRINT("Cannot build index due to invalid script path: " + path);
 			continue;
 		}

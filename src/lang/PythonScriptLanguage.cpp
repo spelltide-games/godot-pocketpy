@@ -90,11 +90,11 @@ R"(from godot import *
 from godot.classes import _BASE_CLASS_
 
 class _CLASS_(Extends(_BASE_CLASS_)):
-	def _ready(self):
-		pass
+    def _ready(self):
+        pass
 
-	def _process(self, delta: float):
-		pass
+    def _process(self, delta: float):
+        pass
 )";
 
 	return Array::make(node_template);
