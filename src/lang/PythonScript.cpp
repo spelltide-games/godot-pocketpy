@@ -137,8 +137,9 @@ Error PythonScript::_reload(bool keep_state) {
 			(long long)std::hash<std::thread::id>()(tid));
 
 	if (tid != pyctx()->main_thread_id) {
-		ERR_PRINT("PythonScript.reload() must be called from the main thread!");
-		// py_switchvm(0);
+		if (!Engine::get_singleton()->is_editor_hint()) {
+			ERR_PRINT("PythonScript.reload() must be called from the main thread!");
+		}
 		return ERR_UNAVAILABLE;
 	}
 
