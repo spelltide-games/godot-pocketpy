@@ -15,15 +15,16 @@ namespace pkpy {
 
 void setup_bindings_generated();
 
-static bool call_next_for_coroutine(Object* owner, IdGenerator::T id);
+static bool call_next_for_coroutine(Object *owner, IdGenerator::T id);
 
-static void call_next_for_coroutine_no_error(Object* owner, IdGenerator::T id) {
+static void call_next_for_coroutine_no_error(Object *owner, IdGenerator::T id) {
 	py_Ref p0 = py_peek(0);
 	bool ok = call_next_for_coroutine(owner, id);
-	if(!ok) log_python_error_and_clearexc(p0);
+	if (!ok)
+		log_python_error_and_clearexc(p0);
 }
 
-static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
+static bool call_next_for_coroutine(Object *owner, IdGenerator::T id) {
 	std::thread::id current_thread_id = std::this_thread::get_id();
 	if (current_thread_id != pyctx()->main_thread_id) {
 		ERR_PRINT("coroutine can only be resumed in the main thread");
@@ -31,23 +32,23 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 	}
 
 	PythonScriptInstance *instance = PythonScriptInstance::attached_to_object(owner);
-	if(instance == NULL) {
+	if (instance == NULL) {
 		py_newint(py_retval(), id);
 		return true;
 	}
 	py_ItemRef gen = instance->coroutines.getptr(id);
-	if(gen == NULL) {
+	if (gen == NULL) {
 		py_newint(py_retval(), id);
 		return true;
 	}
 
 	int res = py_next(gen);
-	if(res == 1) {
-		if(py_retval()->type != pyctx()->tp_Variant) {
+	if (res == 1) {
+		if (py_retval()->type != pyctx()->tp_Variant) {
 			return TypeError("coroutine yielded value must be 'godot.Signal', got '%t'", py_typeof(py_retval()));
 		}
 		Variant v = to_variant_exact(py_retval());
-		if(v.get_type() != Variant::SIGNAL) {
+		if (v.get_type() != Variant::SIGNAL) {
 			CharString type_name = Variant::get_type_name(v.get_type()).utf8();
 			return TypeError("coroutine yielded value must be 'godot.Signal', got '%s'", type_name.get_data());
 		}
@@ -58,7 +59,7 @@ static bool call_next_for_coroutine(Object* owner, IdGenerator::T id) {
 		return true;
 	} else if (res == -1) {
 		instance->coroutines.erase(id);
-		return false;	// error
+		return false; // error
 	} else {
 		// generator finished
 		instance->coroutines.erase(id);
@@ -73,13 +74,13 @@ static void setup_awaitables() {
 		py_Type cls = py_totype(&argv[0]);
 		PythonScript *script = PythonScript::runtime_type_to_script.get(cls);
 		StringName node_cls = script->meta.extends;
-		if(!ClassDB::can_instantiate(node_cls)) {
+		if (!ClassDB::can_instantiate(node_cls)) {
 			py_Name node_cls_py = godot_name_to_python(node_cls);
 			return TypeError("cannot instantiate script that extends '%n'", node_cls_py);
 		}
 		Variant v = ClassDB::instantiate(node_cls);
-		Node* node = Object::cast_to<Node>(v);
-		if(node == NULL) {
+		Node *node = Object::cast_to<Node>(v);
+		if (node == NULL) {
 			return RuntimeError("Object::cast_to<Node> failed");
 		}
 
@@ -88,7 +89,7 @@ static void setup_awaitables() {
 		py_newvariant(py_retval(), &v);
 		return true;
 	});
-	
+
 	py_bindmethod(pyctx()->tp_Script, "start_coroutine", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(2);
 		PY_CHECK_ARG_TYPE(1, tp_generator);
@@ -209,7 +210,7 @@ void setup_python_bindings() {
 	py_callbacks()->flush = []() {
 		// No-op, Godot's print is already flushed.
 	};
-	py_callbacks()->importfile = [](const char *path_cstr, int* size) -> char * {
+	py_callbacks()->importfile = [](const char *path_cstr, int *size) -> char * {
 		String path = String::utf8(path_cstr);
 		path = "res://site-packages/" + path;
 		bool exists = FileAccess::file_exists(path);
@@ -250,10 +251,10 @@ void setup_python_bindings() {
 		return true;
 	});
 
-	// cast()
-	py_bindfunc(godot, "cast", [](int argc, py_Ref argv) -> bool {
+	// as_()
+	py_bindfunc(godot, "as_", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(2);
-		if(!godot_isinstance_one(py_arg(0), py_arg(1))) {
+		if (!godot_isinstance_one(py_arg(0), py_arg(1))) {
 			return TypeError("cast(): !godot_isinstance_one");
 		}
 		py_assign(py_retval(), py_arg(0));
@@ -290,13 +291,28 @@ void setup_python_bindings() {
 	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, GDNativeClass_getunboundmethod);
 
 	// Extends
-	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
+	py_Type dummy_extends_t = py_newtype("Extends", tp_object, godot, NULL);
+	py_bindmethod(dummy_extends_t, "__new__", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(2);
+		py_Ref real_arg = py_arg(1);
 		auto ctx = &pyctx()->reloading_context;
-		PY_CHECK_ARGC(1);
-		PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
-		StringName nativeClass = to_GDNativeClass(argv);
-		ctx->extends = nativeClass;
-		py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
+		if (py_istype(real_arg, pyctx()->tp_GDNativeClass)) {
+			StringName nativeClass = to_GDNativeClass(real_arg);
+			ctx->extends = nativeClass;
+			py_assign(py_retval(), py_tpobject(pyctx()->tp_Script));
+		} else if (py_isstr(real_arg)) {
+			const char *path_cstr = py_tostr(real_arg);
+			String path = String::utf8(path_cstr);
+			Ref<PythonScript> base_script = ResourceLoader::get_singleton()->load(path);
+			if (base_script.is_valid()) {
+				ctx->extends = base_script->meta.extends;
+				py_assign(py_retval(), py_tpobject(base_script->meta.type));
+			} else {
+				return RuntimeError("Failed to load base script '%s'", path_cstr);
+			}
+		} else {
+			return TypeError("Extends() argument must be a string or GDNativeClass");
+		}
 		return true;
 	});
 
