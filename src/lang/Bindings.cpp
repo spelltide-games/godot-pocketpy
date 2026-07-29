@@ -291,10 +291,9 @@ void setup_python_bindings() {
 	py_tphookattributes(pyctx()->tp_GDNativeClass, GDNativeClass_getattribute, NULL, NULL, GDNativeClass_getunboundmethod);
 
 	// Extends
-	py_Type dummy_extends_t = py_newtype("Extends", tp_object, godot, NULL);
-	py_bindmethod(dummy_extends_t, "__new__", [](int argc, py_Ref argv) -> bool {
-		PY_CHECK_ARGC(2);
-		py_Ref real_arg = py_arg(1);
+	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
+		PY_CHECK_ARGC(1);
+		py_Ref real_arg = py_arg(0);
 		auto ctx = &pyctx()->reloading_context;
 		if (py_istype(real_arg, pyctx()->tp_GDNativeClass)) {
 			StringName nativeClass = to_GDNativeClass(real_arg);
