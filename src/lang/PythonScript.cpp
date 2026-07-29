@@ -196,23 +196,27 @@ Error PythonScript::_reload(bool keep_state) {
 
 	std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> ctx_pair = { &defines, &new_meta };
 
-	py_applydict(
-			exposed_class, [](py_Name name, py_ItemRef value, void *ctx) -> bool {
-				auto ctx_pair = (std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> *)ctx;
-				Vector<DefineStatement *> *defines = ctx_pair->first;
-				PythonScriptMeta *new_meta = ctx_pair->second;
-				StringName name_godot = python_name_to_godot(name);
+	py_Type t = exposed_type;
+	while (t != pyctx()->tp_Script) {
+		py_applydict(
+				py_tpobject(t), [](py_Name name, py_ItemRef value, void *ctx) -> bool {
+					auto ctx_pair = (std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> *)ctx;
+					Vector<DefineStatement *> *defines = ctx_pair->first;
+					PythonScriptMeta *new_meta = ctx_pair->second;
+					StringName name_godot = python_name_to_godot(name);
 
-				if (py_istype(value, pyctx()->tp_DefineStatement)) {
-					DefineStatement *d = (DefineStatement *)py_touserdata(value);
-					d->name = name_godot;
-					defines->push_back(d);
-				} else if (py_istype(value, tp_function)) {
-					new_meta->methods[name_godot] = 0;
-				}
-				return true;
-			},
-			&ctx_pair);
+					if (py_istype(value, pyctx()->tp_DefineStatement)) {
+						DefineStatement *d = (DefineStatement *)py_touserdata(value);
+						d->name = name_godot;
+						defines->push_back(d);
+					} else if (py_istype(value, tp_function)) {
+						new_meta->methods[name_godot] = 0;
+					}
+					return true;
+				},
+				&ctx_pair);
+		t = py_tpbase(t);
+	}
 
 	defines.sort();
 
