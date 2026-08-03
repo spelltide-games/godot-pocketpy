@@ -14,7 +14,9 @@ PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> scri
 }
 
 PythonScriptInstance::~PythonScriptInstance() {
-	known_instances.erase(owner->get_instance_id());
+	if (owner != NULL) {
+		known_instances.erase(owner->get_instance_id());
+	}
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
@@ -216,7 +218,7 @@ void PythonScriptInstance::gc_mark_instances(void (*f)(py_Ref val, void *ctx), v
 		PythonScriptInstance *instance = kv.value;
 		f(&instance->py, ctx);
 
-		for(auto &c_kv: instance->coroutines) {
+		for (auto &c_kv : instance->coroutines) {
 			f(&c_kv.value, ctx);
 		}
 	}
