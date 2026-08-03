@@ -10,11 +10,11 @@ namespace pkpy {
 
 PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
 		owner(owner), script(script) {
-	known_instances.insert(owner, this);
+	known_instances.insert(owner->get_instance_id(), this);
 }
 
 PythonScriptInstance::~PythonScriptInstance() {
-	known_instances.erase(owner);
+	known_instances.erase(owner->get_instance_id());
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
@@ -204,7 +204,7 @@ GDExtensionScriptInstanceInfo3 *PythonScriptInstance::get_script_instance_info()
 }
 
 PythonScriptInstance *PythonScriptInstance::attached_to_object(Object *owner) {
-	if (PythonScriptInstance **ptr = known_instances.getptr(owner)) {
+	if (PythonScriptInstance **ptr = known_instances.getptr(owner->get_instance_id())) {
 		return *ptr;
 	} else {
 		return nullptr;
@@ -222,6 +222,6 @@ void PythonScriptInstance::gc_mark_instances(void (*f)(py_Ref val, void *ctx), v
 	}
 }
 
-HashMap<Object *, PythonScriptInstance *> PythonScriptInstance::known_instances;
+HashMap<uint64_t, PythonScriptInstance *> PythonScriptInstance::known_instances;
 
 } //namespace pkpy

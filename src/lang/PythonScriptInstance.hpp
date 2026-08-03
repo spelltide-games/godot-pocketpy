@@ -28,8 +28,8 @@ struct PythonScriptInstance {
 	static void gc_mark_instances(void (*f)(py_Ref val, void *ctx), void *ctx);
 
 private:
-	// Node -> PythonScriptInstance
-	static HashMap<Object *, PythonScriptInstance *> known_instances;
+	// Node instance ID -> PythonScriptInstance
+	static HashMap<uint64_t, PythonScriptInstance *> known_instances;
 };
 
 } //namespace pkpy
