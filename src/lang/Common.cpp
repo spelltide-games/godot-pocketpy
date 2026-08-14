@@ -159,6 +159,14 @@ void py_newvariant(py_OutRef out, const Variant *val) {
 			return;
 		}
 		default: {
+			if (val->get_type() == Variant::OBJECT) {
+				// nullptr Object should be converted to None
+				Object *obj = val->operator Object *();
+				if (obj == nullptr) {
+					py_newnone(out);
+					return;
+				}
+			}
 			void *ud = py_newobject(out, pyctx()->tp_Variant, 0, sizeof(Variant));
 			out->extra = Variant::OBJECT; // not only real OBJECT but also PackedStringArray like
 			Variant *v = new (ud) Variant(*val);

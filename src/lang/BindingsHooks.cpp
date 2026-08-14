@@ -20,6 +20,11 @@ bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant v = to_variant_exact(self);
 	if (v.get_type() == Variant::OBJECT) {
 		Object *obj = v.operator Object *();
+#ifndef NDEBUG
+		if (obj == nullptr) {
+			return RuntimeError("Variant_getattribute(): Variant of type 'Object' is null");
+		}
+#endif
 		if (name == pyctx()->names.script) {
 			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
 			if (inst != nullptr) {

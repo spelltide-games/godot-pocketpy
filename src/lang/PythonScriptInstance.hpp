@@ -18,6 +18,7 @@ struct PythonScriptInstance {
 	static PythonScriptInstance *attached_to_object(Object *owner);
 
 	Object *owner;
+	uint64_t owner_id;
 	Ref<PythonScript> script;
 
 	py_TValue py;

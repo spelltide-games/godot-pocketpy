@@ -9,13 +9,13 @@
 namespace pkpy {
 
 PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
-		owner(owner), script(script) {
-	known_instances.insert(owner->get_instance_id(), this);
+		owner(owner), owner_id(owner->get_instance_id()), script(script) {
+	known_instances.insert(owner_id, this);
 }
 
 PythonScriptInstance::~PythonScriptInstance() {
 	if (owner != NULL) {
-		known_instances.erase(owner->get_instance_id());
+		known_instances.erase(owner_id);
 	}
 }
 
