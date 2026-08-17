@@ -1,6 +1,7 @@
 #include "PythonScriptLanguage.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/reg_ex.hpp>
 #include <godot_cpp/classes/reg_ex_match.hpp>
@@ -86,7 +87,7 @@ TypedArray<Dictionary> PythonScriptLanguage::_get_built_in_templates(const Strin
 	node_template["description"] = "Node script template";
 	node_template["origin"] = 0;
 	node_template["content"] =
-R"(from godot import *
+			R"(from godot import *
 from godot.classes import _BASE_CLASS_
 
 class _CLASS_(Extends(_BASE_CLASS_)):
@@ -286,18 +287,34 @@ bool PythonScriptLanguage::_handles_global_class_type(const String &type) const 
 }
 
 Dictionary PythonScriptLanguage::_get_global_class_name(const String &path) const {
-	return {};
-	Ref<PythonScript> script = ResourceLoader::get_singleton()->load(path);
-
-	Dictionary result;
-	if (script.is_valid() && script->_is_valid()) {
-		result["name"] = script->_get_global_name();
-		result["base_type"] = script->_get_instance_base_type();
-		result["icon_path"] = script->_get_class_icon_path();
-		result["is_abstract"] = script->_is_abstract();
-		result["is_tool"] = script->_is_tool();
+	String filename = path.get_file();
+	if (!filename.ends_with(".py")) {
+		return {};
 	}
-	return result;
+
+	Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+	if (!file.is_valid()) {
+		return {};
+	}
+
+	String source = file->get_as_text();
+	Ref<RegEx> re = RegEx::create_from_string(R"(class (\w+)\(Extends\((\w+)\)\):)");
+	Ref<RegExMatch> match = re->search(source);
+
+	if (match.is_valid()) {
+		String name = match->get_string(1);
+		String base_type = match->get_string(2);
+		if (name == filename.get_basename()) {
+			if (ClassDB::class_exists(base_type)) {
+				Dictionary d;
+				d["name"] = name;
+				d["base_type"] = base_type;
+				d["is_abstract"] = false;
+				return d;
+			}
+		}
+	}
+	return {};
 }
 
 PythonScriptLanguage *PythonScriptLanguage::get_singleton() {
@@ -321,7 +338,6 @@ void PythonScriptLanguage::delete_singleton() {
 }
 
 void PythonScriptLanguage::_bind_methods() {
-	
 }
 
 PythonScriptLanguage *PythonScriptLanguage::instance = nullptr;
