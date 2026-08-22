@@ -146,8 +146,6 @@ Error PythonScript::_reload(bool keep_state) {
 	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
 	PythonScriptMeta new_meta;
-	auto ctx = &pyctx()->reloading_context;
-	ctx->reset();
 
 	String basename = get_path().get_file().get_basename();
 	if (basename.is_empty() || !has_source_code()) {
@@ -156,12 +154,15 @@ Error PythonScript::_reload(bool keep_state) {
 	auto path_cstr = get_path().utf8();
 	String module_path = "godot.scripts." + basename;
 	auto module_path_cstr = module_path.utf8();
+
+	auto ctx = &pyctx()->reloading_contexts.emplace();
 	ctx->class_name = StringName(basename);
 
 	if (known_classes.has(ctx->class_name)) {
 		String old_path = known_classes[ctx->class_name];
 		if (old_path != get_path()) {
 			ERR_PRINT("Duplicate class name: " + String(ctx->class_name) + " has been defined in both " + old_path + " and " + get_path());
+			pyctx()->reloading_contexts.pop();
 			return ERR_COMPILATION_FAILED;
 		}
 	}
@@ -176,6 +177,7 @@ Error PythonScript::_reload(bool keep_state) {
 	bool ok = py_exec(source_code.utf8().get_data(), path_cstr, RELOAD_MODE, module);
 	if (!ok) {
 		log_python_error_and_clearexc(p0);
+		pyctx()->reloading_contexts.pop();
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -184,6 +186,7 @@ Error PythonScript::_reload(bool keep_state) {
 	py_Ref exposed_class = py_getdict(module, class_name);
 	if (!exposed_class || !py_istype(exposed_class, tp_type)) {
 		ERR_PRINT("Failed to find class '" + ctx->class_name + "' in " + get_path());
+		pyctx()->reloading_contexts.pop();
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -222,6 +225,7 @@ Error PythonScript::_reload(bool keep_state) {
 
 	if (ctx->extends.is_empty()) {
 		ERR_PRINT("Failed to find base class for " + get_path());
+		pyctx()->reloading_contexts.pop();
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -247,6 +251,7 @@ Error PythonScript::_reload(bool keep_state) {
 	Error err = new_meta.gds->reload(false);
 	if (err != OK) {
 		ERR_PRINT("Failed to compile GDScript: " + itos(err) + "\n" + new_meta.gds->get_source_code());
+		pyctx()->reloading_contexts.pop();
 		return ERR_COMPILATION_FAILED;
 	}
 
@@ -264,6 +269,8 @@ Error PythonScript::_reload(bool keep_state) {
 		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
 		runtime_type_to_script[exposed_type] = this;
 	}
+
+	pyctx()->reloading_contexts.pop();
 	return OK;
 }
 

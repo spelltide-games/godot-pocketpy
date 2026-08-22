@@ -118,6 +118,14 @@ static void setup_awaitables() {
 	});
 }
 
+static bool get_top_ctx(PythonScriptReloadingContext **p_ctx) {
+	if (pyctx()->reloading_contexts.empty()) {
+		return RuntimeError("no reloading context available");
+	}
+	*p_ctx = &pyctx()->reloading_contexts.top();
+	return true;
+}
+
 static void setup_exports() {
 	// export
 	pyctx()->tp_DefineStatement = py_newtype("_DefineStatement", tp_object, pyctx()->godot, [](void *ud) {
@@ -126,7 +134,11 @@ static void setup_exports() {
 	});
 
 	py_bind(pyctx()->godot, "export(cls, default=None)", [](int argc, py_Ref argv) -> bool {
-		auto ctx = &pyctx()->reloading_context;
+		PythonScriptReloadingContext *ctx;
+		if (!get_top_ctx(&ctx)) {
+			return false;
+		}
+
 		StringName type_name;
 
 		if (py_istype(&argv[0], tp_type)) {
@@ -162,7 +174,10 @@ static void setup_exports() {
 	});
 
 	py_bind(pyctx()->godot, "export_range(min, max, step, *extra_hints, default=None)", [](int argc, py_Ref argv) -> bool {
-		auto ctx = &pyctx()->reloading_context;
+		PythonScriptReloadingContext *ctx;
+		if (!get_top_ctx(&ctx)) {
+			return false;
+		}
 		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
 		new (ud) ExportStatement(ctx->next_index());
 		Variant min = py_tovariant(&argv[0]);
@@ -178,7 +193,10 @@ static void setup_exports() {
 	});
 
 	py_bindfunc(pyctx()->godot, "signal", [](int argc, py_Ref argv) -> bool {
-		auto ctx = &pyctx()->reloading_context;
+		PythonScriptReloadingContext *ctx;
+		if (!get_top_ctx(&ctx)) {
+			return false;
+		}
 		SignalStatement *ud = (SignalStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(SignalStatement));
 		new (ud) SignalStatement(ctx->next_index());
 		for (int i = 0; i < argc; i++) {
@@ -294,7 +312,10 @@ void setup_python_bindings() {
 	py_bindfunc(godot, "Extends", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(1);
 		py_Ref real_arg = py_arg(0);
-		auto ctx = &pyctx()->reloading_context;
+		PythonScriptReloadingContext *ctx;
+		if (!get_top_ctx(&ctx)) {
+			return false;
+		}
 		if (py_istype(real_arg, pyctx()->tp_GDNativeClass)) {
 			StringName nativeClass = to_GDNativeClass(real_arg);
 			ctx->extends = nativeClass;

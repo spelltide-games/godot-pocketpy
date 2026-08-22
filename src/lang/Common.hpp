@@ -4,13 +4,13 @@
 #include "godot_cpp/variant/callable.hpp"
 #include "pocketpy.h"
 
-#include <atomic>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <thread>
+#include <stack>
 
 using namespace godot;
 
@@ -110,8 +110,7 @@ struct PythonContext {
 	// internals
 	py_Type tp_DefineStatement;
 	std::thread::id main_thread_id;
-	// std::atomic_flag lock;
-	PythonScriptReloadingContext reloading_context;
+	std::stack<PythonScriptReloadingContext> reloading_contexts;
 	HashMap<String, Variant> class_constants;
 	struct {
 		py_Name __init__;
