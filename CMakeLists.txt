@@ -14,7 +14,7 @@ option(PK_ENABLE_MIMALLOC "" OFF)
 
 option(PK_BUILD_STATIC_LIB "" ON)
 option(PK_BUILD_MODULE_LZ4 "" ON)
-option(PK_BUILD_MODULE_CUTE_PNG "" ON)
+option(PK_BUILD_MODULE_CUTE_PNG "" OFF)
 option(PK_BUILD_MODULE_MSGPACK "" ON)
 add_subdirectory(pocketpy)
 
