@@ -60,13 +60,21 @@ struct InternalArguments {
 
 	InternalArguments(int length) : length(length) {
 		if (length > 4) {
+			// A union member is never constructed implicitly. Without this the
+			// Vectors' `CowData::_ptr = nullptr` initializer never runs and resize()
+			// operates on an uninitialized pointer.
+			using DynType = decltype(dyn);
+			new (&dyn) DynType();
 			dyn._args.resize(length);
 			dyn._pointers.resize(length);
 			for (int i = 0; i < length; i++) {
 				dyn._pointers.write[i] = &dyn._args[i];
 			}
 		} else {
-			std::memset(stc._args, 0, sizeof(Variant) * 4);
+			// Same here. Value-initializing runs Variant's constructor on each slot,
+			// which is what the memset was standing in for.
+			using StcType = decltype(stc);
+			new (&stc) StcType();
 			for (int i = 0; i < length; i++) {
 				stc._pointers[i] = &stc._args[i];
 			}
@@ -137,10 +145,6 @@ struct DefineStatement {
 
 	DefineStatement(IdGenerator::T index) :
 			index(index), name() {}
-
-	bool operator<(const DefineStatement &other) const {
-		return index < other.index;
-	}
 
 	virtual bool is_signal() const = 0;
 	virtual ~DefineStatement() = default;

@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://duah7g43u52y3"]
+
+[sub_resource type="GDScript" id="GDScript_t8slq"]
+script/source = "extends Node2D
+
+static var count = 0
+
+@export var z: int
+@export var x: float
+@export var y: String
+
+var leak = []
+
+# Called when the node enters the scene tree for the first time.
+func _ready() -> void:
+    count += 1
+    for i in range(1000):
+        leak.append(1)
+"
+
+[node name="LeakNodeGds" type="Node2D" unique_id=211600737]
+script = SubResource("GDScript_t8slq")

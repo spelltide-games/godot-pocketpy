@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/callable_custom.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "sbx.hpp"
@@ -23,6 +24,56 @@ static void call_next_for_coroutine_no_error(Object *owner, IdGenerator::T id) {
 	if (!ok)
 		log_python_error_and_clearexc(p0);
 }
+
+// One per pending `yield <signal>`, instead of `callable_mp_static(...).bind(owner, id)`.
+// Bound arguments are appended *after* the signal's own, so a fixed-arity callable
+// only fits a signal that declares no parameters; and Object::connect compares
+// callables through `get_base_comparator()`, which ignores binds, so one shared
+// callable would let only a single coroutine at a time wait on any given signal.
+// Carrying `owner`/`id` in the callable itself solves both: it accepts any argument
+// count, and each instance is a distinct connection.
+class CoroutineResumer : public CallableCustom {
+	ObjectID owner_id;
+	IdGenerator::T coroutine_id;
+
+	static bool _equal(const CallableCustom *p_a, const CallableCustom *p_b) {
+		const CoroutineResumer *a = static_cast<const CoroutineResumer *>(p_a);
+		const CoroutineResumer *b = static_cast<const CoroutineResumer *>(p_b);
+		return a->owner_id == b->owner_id && a->coroutine_id == b->coroutine_id;
+	}
+
+	static bool _less(const CallableCustom *p_a, const CallableCustom *p_b) {
+		const CoroutineResumer *a = static_cast<const CoroutineResumer *>(p_a);
+		const CoroutineResumer *b = static_cast<const CoroutineResumer *>(p_b);
+		if (a->owner_id != b->owner_id) {
+			return a->owner_id < b->owner_id;
+		}
+		return a->coroutine_id < b->coroutine_id;
+	}
+
+public:
+	CoroutineResumer(Object *owner, IdGenerator::T id) :
+			owner_id(owner->get_instance_id()), coroutine_id(id) {}
+
+	uint32_t hash() const override {
+		uint64_t h = (uint64_t)owner_id * 0x9E3779B97F4A7C15ULL + (uint64_t)coroutine_id;
+		return (uint32_t)(h ^ (h >> 32));
+	}
+
+	String get_as_text() const override { return "<python coroutine>"; }
+	CompareEqualFunc get_compare_equal_func() const override { return _equal; }
+	CompareLessFunc get_compare_less_func() const override { return _less; }
+
+	// Also makes Godot drop the connection when the owner is freed.
+	ObjectID get_object() const override { return owner_id; }
+
+	// The signal's own arguments are ignored: pocketpy has no `generator.send()`,
+	// so there is nothing to hand back to the coroutine anyway.
+	void call(const Variant **, int, Variant &, GDExtensionCallError &r_error) const override {
+		r_error.error = GDEXTENSION_CALL_OK;
+		call_next_for_coroutine_no_error(ObjectDB::get_instance(owner_id), coroutine_id);
+	}
+};
 
 static bool call_next_for_coroutine(Object *owner, IdGenerator::T id) {
 	std::thread::id current_thread_id = std::this_thread::get_id();
@@ -53,8 +104,8 @@ static bool call_next_for_coroutine(Object *owner, IdGenerator::T id) {
 			return TypeError("coroutine yielded value must be 'godot.Signal', got '%s'", type_name.get_data());
 		}
 		Signal signal = v;
-		Callable callable = callable_mp_static(call_next_for_coroutine_no_error);
-		signal.connect(callable.bind(owner, id), Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
+		signal.connect(Callable(memnew(CoroutineResumer(owner, id))),
+				Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
 		py_newint(py_retval(), id);
 		return true;
 	} else if (res == -1) {
@@ -72,7 +123,14 @@ static void setup_awaitables() {
 	py_bindmethod(pyctx()->tp_Script, "__new__", [](int argc, py_Ref argv) -> bool {
 		PY_CHECK_ARGC(1);
 		py_Type cls = py_totype(&argv[0]);
-		PythonScript *script = PythonScript::runtime_type_to_script.get(cls);
+		PythonScript **p_script = PythonScript::runtime_type_to_script.getptr(cls);
+		if (p_script == NULL) {
+			return RuntimeError("no PythonScript is registered for '%t'", cls);
+		}
+		PythonScript *script = *p_script;
+		if (!script->_is_valid()) {
+			return RuntimeError("PythonScript '%s' is not valid", script->get_path().utf8().get_data());
+		}
 		StringName node_cls = script->meta.extends;
 		if (!ClassDB::can_instantiate(node_cls)) {
 			py_Name node_cls_py = godot_name_to_python(node_cls);
@@ -219,7 +277,7 @@ void setup_python_bindings() {
 	py_callbacks()->gc_mark = PythonScriptInstance::gc_mark_instances;
 	py_callbacks()->print = [](const char *msg) {
 		size_t length = strlen(msg);
-		if (msg[length - 1] == '\n') {
+		if (length > 0 && msg[length - 1] == '\n') {
 			length--;
 		}
 		String s = String::utf8(msg, length);
@@ -429,14 +487,19 @@ void setup_python_bindings() {
 		return RuntimeError("!r_valid");                               \
 	});
 
-#define DEF_BINARY_OP(__name, __op)                                    \
+// `__swap` reverses the operand order. Godot evaluates `a <op> b`, which matches
+// Python for every operator below except `__contains__`: that one arrives as
+// `container.__contains__(item)` while OP_IN evaluates `item in container`.
+#define DEF_BINARY_OP(__name, __op, __swap)                            \
 	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {    \
 		PY_CHECK_ARGC(2);                                              \
 		Variant self = to_variant_exact(&argv[0]);                     \
 		Variant other = py_tovariant(&argv[1]);                        \
 		Variant r_ret;                                                 \
 		bool r_valid;                                                  \
-		Variant::evaluate(Variant::__op, self, other, r_ret, r_valid); \
+		const Variant &a = __swap ? other : self;                      \
+		const Variant &b = __swap ? self : other;                      \
+		Variant::evaluate(Variant::__op, a, b, r_ret, r_valid);        \
 		if (r_valid) {                                                 \
 			py_newvariant(py_retval(), &r_ret);                        \
 			return true;                                               \
@@ -444,26 +507,26 @@ void setup_python_bindings() {
 		return RuntimeError("!r_valid");                               \
 	});
 
-	DEF_BINARY_OP("__eq__", OP_EQUAL)
-	DEF_BINARY_OP("__ne__", OP_NOT_EQUAL)
-	DEF_BINARY_OP("__lt__", OP_LESS)
-	DEF_BINARY_OP("__le__", OP_LESS_EQUAL)
-	DEF_BINARY_OP("__gt__", OP_GREATER)
-	DEF_BINARY_OP("__ge__", OP_GREATER_EQUAL)
+	DEF_BINARY_OP("__eq__", OP_EQUAL, false)
+	DEF_BINARY_OP("__ne__", OP_NOT_EQUAL, false)
+	DEF_BINARY_OP("__lt__", OP_LESS, false)
+	DEF_BINARY_OP("__le__", OP_LESS_EQUAL, false)
+	DEF_BINARY_OP("__gt__", OP_GREATER, false)
+	DEF_BINARY_OP("__ge__", OP_GREATER_EQUAL, false)
 
-	DEF_BINARY_OP("__add__", OP_ADD)
-	DEF_BINARY_OP("__sub__", OP_SUBTRACT)
-	DEF_BINARY_OP("__mul__", OP_MULTIPLY)
-	DEF_BINARY_OP("__truediv__", OP_DIVIDE)
-	DEF_BINARY_OP("__mod__", OP_MODULE)
-	DEF_BINARY_OP("__pow__", OP_POWER)
-	DEF_BINARY_OP("__lshift__", OP_SHIFT_LEFT)
-	DEF_BINARY_OP("__rshift__", OP_SHIFT_RIGHT)
-	DEF_BINARY_OP("__and__", OP_BIT_AND)
-	DEF_BINARY_OP("__or__", OP_BIT_OR)
-	DEF_BINARY_OP("__xor__", OP_BIT_XOR)
+	DEF_BINARY_OP("__add__", OP_ADD, false)
+	DEF_BINARY_OP("__sub__", OP_SUBTRACT, false)
+	DEF_BINARY_OP("__mul__", OP_MULTIPLY, false)
+	DEF_BINARY_OP("__truediv__", OP_DIVIDE, false)
+	DEF_BINARY_OP("__mod__", OP_MODULE, false)
+	DEF_BINARY_OP("__pow__", OP_POWER, false)
+	DEF_BINARY_OP("__lshift__", OP_SHIFT_LEFT, false)
+	DEF_BINARY_OP("__rshift__", OP_SHIFT_RIGHT, false)
+	DEF_BINARY_OP("__and__", OP_BIT_AND, false)
+	DEF_BINARY_OP("__or__", OP_BIT_OR, false)
+	DEF_BINARY_OP("__xor__", OP_BIT_XOR, false)
 
-	DEF_BINARY_OP("__contains__", OP_IN)
+	DEF_BINARY_OP("__contains__", OP_IN, true)
 #undef DEF_BINARY_OP
 
 	DEF_UNARY_OP("__neg__", OP_NEGATE)
