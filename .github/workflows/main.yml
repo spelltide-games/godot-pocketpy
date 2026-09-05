@@ -201,6 +201,10 @@ jobs:
           name: ios
           path: demo/addons/godot-pocketpy/bin/ios
 
+      - name: "Use release libraries"
+        run: |
+          sed -i 's/template_debug/template_release/g' demo/addons/godot-pocketpy/godot-pocketpy.gdextension
+
       - name: "Upload merged artifact"
         uses: actions/upload-artifact@v4.3.3
         with:
