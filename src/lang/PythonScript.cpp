@@ -26,6 +26,7 @@ PythonScript::PythonScript() :
 
 PythonScript::~PythonScript() {
 	placeholders.erase(this);
+	runtime_type_to_script.erase(meta.type);
 	if (meta.is_valid && !meta.class_name.is_empty()) {
 		known_classes.erase(meta.class_name);
 	}
@@ -96,6 +97,11 @@ void *PythonScript::_instance_create(Object *for_object) const {
 	} else {
 		if (!py_vectorcall(0, 0)) {
 			log_python_error_and_clearexc(p0);
+			// No ScriptInstanceExtension is created for `for_object`, so Godot will
+			// never call `free_func` for this instance. Detach it by hand, otherwise
+			// it stays a GC root forever and `_instance_has()` keeps reporting a
+			// script instance that does not exist.
+			ud->detach_from_owner();
 			return NULL;
 		}
 	}
@@ -192,6 +198,14 @@ Error PythonScript::_reload(bool keep_state) {
 
 	exposed_type = py_totype(exposed_class);
 
+	// The base walk below terminates at `tp_Script`, so a class that never went
+	// through `Extends(...)` would run off the end of the chain.
+	if (!py_issubclass(exposed_type, pyctx()->tp_Script)) {
+		ERR_PRINT("Class '" + ctx->class_name + "' in " + get_path() + " must derive from Extends(...)");
+		pyctx()->reloading_contexts.pop();
+		return ERR_COMPILATION_FAILED;
+	}
+
 	// promote `exposed_class` variable from `py_ItemRef` into `py_GlobalRef`
 	exposed_class = py_tpobject(exposed_type);
 
@@ -221,7 +235,9 @@ Error PythonScript::_reload(bool keep_state) {
 		t = py_tpbase(t);
 	}
 
-	defines.sort();
+	// sort() would compare the pointers themselves, not the declaration order
+	struct ByIndex { bool operator()(const DefineStatement *a, const DefineStatement *b) const { return a->index < b->index; } };
+	defines.sort_custom<ByIndex>();
 
 	if (ctx->extends.is_empty()) {
 		ERR_PRINT("Failed to find base class for " + get_path());

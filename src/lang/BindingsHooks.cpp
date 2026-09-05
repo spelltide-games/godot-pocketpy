@@ -20,11 +20,9 @@ bool Variant_getattribute(py_Ref self, py_Name name) {
 	Variant v = to_variant_exact(self);
 	if (v.get_type() == Variant::OBJECT) {
 		Object *obj = v.operator Object *();
-#ifndef NDEBUG
 		if (obj == nullptr) {
 			return RuntimeError("Variant_getattribute(): Variant of type 'Object' is null");
 		}
-#endif
 		if (name == pyctx()->names.script) {
 			PythonScriptInstance *inst = PythonScriptInstance::attached_to_object(obj);
 			if (inst != nullptr) {
@@ -203,7 +201,7 @@ static bool GDNativeClass_getunboundmethod_pybind(int argc, py_Ref argv) {
 			}
 			ClassDBSingleton *singleton = ClassDBSingleton::get_singleton();
 			static GDExtensionMethodBindPtr _gde_method_bind = internal::gdextension_interface_classdb_get_method_bind(singleton->get_class_static()._native_ptr(), StringName("class_call_static")._native_ptr(), 3344196419);
-			CHECK_METHOD_BIND_RET(_gde_method_bind, (Variant()));
+			CHECK_METHOD_BIND_RET(_gde_method_bind, (RuntimeError("%s", "!_gde_method_bind")));
 			internal::gdextension_interface_object_method_bind_call(_gde_method_bind, singleton->_owner, args.ptr(), args.size(), &r_ret, &r_error);
 		} else {
 			InternalArguments args(argc - 1);

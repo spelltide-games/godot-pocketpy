@@ -15,8 +15,27 @@ PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> scri
 
 PythonScriptInstance::~PythonScriptInstance() {
 	if (owner != NULL) {
+		// Only reachable when the object is destroyed while still attached,
+		// i.e. from `py_finalize()` at shutdown.
 		known_instances.erase(owner_id);
 	}
+}
+
+void PythonScriptInstance::detach_from_owner() {
+	if (owner == NULL) {
+		return; // already detached
+	}
+	// Drop the GC root. Until this happens `gc_mark_instances()` re-marks `py`
+	// on every collection, so the pocketpy object -- and with it this
+	// PythonScriptInstance, which lives in its userdata -- can never be swept
+	// and `~PythonScriptInstance()` can never run.
+	known_instances.erase(owner_id);
+	// The owner is gone. Anything still holding this instance from Python must
+	// observe a null owner instead of a dangling pointer.
+	owner = NULL;
+	// Pending coroutines are resumed through the owner's signals, so they can
+	// never make progress again. Hand the generators back to the GC.
+	coroutines.clear();
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
@@ -171,6 +190,11 @@ void *get_language_func(PythonScriptInstance *instance) {
 }
 
 void free_func(PythonScriptInstance *instance) {
+	// NOTE: do NOT delete `instance` here. It lives in the userdata of a
+	// pocketpy object and is owned by the GC; `~PythonScriptInstance()` runs
+	// when that object is swept. What we must do is release the engine-side
+	// ownership so the GC is able to reach that point at all.
+	instance->detach_from_owner();
 }
 
 GDExtensionScriptInstanceInfo3 script_instance_info = {
@@ -206,6 +230,9 @@ GDExtensionScriptInstanceInfo3 *PythonScriptInstance::get_script_instance_info()
 }
 
 PythonScriptInstance *PythonScriptInstance::attached_to_object(Object *owner) {
+	if (owner == nullptr) {
+		return nullptr; // nothing is attached to nothing
+	}
 	if (PythonScriptInstance **ptr = known_instances.getptr(owner->get_instance_id())) {
 		return *ptr;
 	} else {
