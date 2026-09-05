@@ -92,8 +92,8 @@ target_link_libraries(${LIBNAME} PRIVATE
 if(GODOT_POCKETPY_WITH_SBX)
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sbx_extension/CMakeLists.txt")
         message(FATAL_ERROR
-            "SBX is enabled but its sources are missing. Run: "
-            "git submodule update --init --recursive sbx_extension")
+            "SBX is enabled but its sources are missing. "
+            "Clone the SBX repository into sbx_extension first.")
     endif()
     if(NOT TARGET lz4 OR NOT TARGET msgpack)
         message(FATAL_ERROR

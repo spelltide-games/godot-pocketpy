@@ -34,6 +34,7 @@
 .sconsign.dblite
 
 build/
+/sbx_extension/
 __pycache__/
 *.pdb
 .vscode

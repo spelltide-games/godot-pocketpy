@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 SBX_CPP_TYPINGS = 'sbx_extension/typings/sbxcpp'
 if args.with_sbx and not os.path.isdir(SBX_CPP_TYPINGS):
-    parser.error('SBX typings are missing. Run: git submodule update --init --recursive sbx_extension')
+    parser.error('SBX typings are missing. Clone the SBX repository into sbx_extension first.')
 
 EXTENSION_API_PATH = 'godot-cpp/gdextension/extension_api.json'
 
