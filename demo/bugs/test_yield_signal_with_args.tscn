@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c4kx0kpjrgebx"]
+
+[ext_resource type="Script" uid="uid://tmiejh5ey3s8" path="res://bugs/TestYieldSignalWithArgs.py" id="1_em4xb"]
+
+[node name="TestYieldSignalWithArgs" type="Node2D" unique_id=1010228828]
+script = ExtResource("1_em4xb")

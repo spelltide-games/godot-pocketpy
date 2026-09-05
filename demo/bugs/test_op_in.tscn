@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c42cpxaxi2j7i"]
+
+[ext_resource type="Script" uid="uid://c35xej47uxl71" path="res://bugs/TestOpIn.py" id="1_bpsor"]
+
+[node name="TestOpIn" type="Node2D" unique_id=2119840091]
+script = ExtResource("1_bpsor")

@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://dhg250khrnb1"]
+
+[ext_resource type="Script" uid="uid://cceltoxnj2oqk" path="res://bugs/prefabs/LeakNode.py" id="1_ujnyn"]
+
+[node name="LeakNode" type="Node2D" unique_id=1046497122]
+script = ExtResource("1_ujnyn")
+y = ""
+x = 0.0
+z = 0
