@@ -1,13 +1,22 @@
 [gd_scene format=3 uid="uid://tfjmug7u0pwx"]
 
 [ext_resource type="PackedScene" uid="uid://dhg250khrnb1" path="res://bugs/prefabs/LeakNode.tscn" id="1_yhirn"]
+[ext_resource type="PackedScene" uid="uid://duah7g43u52y3" path="res://bugs/prefabs/LeakNodeGDS.tscn" id="2_dhosp"]
 
 [sub_resource type="GDScript" id="GDScript_v3w1f"]
 script/source = "extends Node2D
 
-@export var leak_node: PackedScene
+@export var leak_node_py: PackedScene
+@export var leak_node_gds: PackedScene
+@export var use_py = true
 
 func _ready() -> void:
+    var leak_node: PackedScene
+    if use_py:
+        leak_node = leak_node_py
+    else:
+        leak_node = leak_node_gds
+
     var i := 0
     while true:
         i += 1
@@ -23,4 +32,5 @@ func _ready() -> void:
 
 [node name="TestLeakNode" type="Node2D" unique_id=522674876]
 script = SubResource("GDScript_v3w1f")
-leak_node = ExtResource("1_yhirn")
+leak_node_py = ExtResource("1_yhirn")
+leak_node_gds = ExtResource("2_dhosp")
