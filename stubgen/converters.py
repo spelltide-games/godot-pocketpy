@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from keyword import iskeyword
 import re
-import pandas as pd
 
 from typing import Any
 
@@ -151,16 +150,16 @@ def convert_type_name(name: str) -> str:
         )
         if len(class_enum_results) > 0:
             result = (
-                class_enum_results.iloc[0].loc["cls_enum_name"]
+                class_enum_results[0]["cls_enum_name"]
                 + "."
-                + class_enum_results.iloc[0].loc["enum_name"]
+                + class_enum_results[0]["enum_name"]
             )
         else:
             global_enum_results = find_records(
                 GLOBAL_ENUMS_DATA, {"orign_enum_name": enum_name}
             )
             if len(global_enum_results) > 0:
-                result = global_enum_results.iloc[0].loc["converted_enum_name"]
+                result = global_enum_results[0]["converted_enum_name"]
             else:
                 raise Exception(f"无法找到枚举类型: {name}")
 
@@ -172,16 +171,16 @@ def convert_type_name(name: str) -> str:
         )
         if len(class_enum_results) > 0:
             result = (
-                class_enum_results.iloc[0].loc["cls_enum_name"]
+                class_enum_results[0]["cls_enum_name"]
                 + "."
-                + class_enum_results.iloc[0].loc["enum_name"]
+                + class_enum_results[0]["enum_name"]
             )
         else:
             global_enum_results = find_records(
                 GLOBAL_ENUMS_DATA, {"orign_enum_name": enum_name}
             )
             if len(global_enum_results) > 0:
-                result = global_enum_results.iloc[0].loc["converted_enum_name"]
+                result = global_enum_results[0]["converted_enum_name"]
             else:
                 raise Exception(f"无法找到枚举类型: {name}")
 
@@ -226,78 +225,66 @@ def get_ALL_TYPES() -> set[str]:
     return BUILTIN_TYPES | NATIVE_TYPES
 
 
-CLASS_ENUM_DATA = pd.DataFrame(
-    {
-        "cls_name": [],
-        "orign_enum_name": [],
-        "cls_enum_name": [],
-        "enum_name": [],
-        "enum_constant_name": [],
-        "constant_value": [],
-    }
-)
+CLASS_ENUM_DATA = {
+    "cls_name": [],
+    "orign_enum_name": [],
+    "cls_enum_name": [],
+    "enum_name": [],
+    "enum_constant_name": [],
+    "constant_value": [],
+}
 
 
-GLOBAL_ENUMS_DATA = pd.DataFrame(
-    {
-        "orign_enum_name": [],
-        "converted_enum_name": [],
-        "enum_constant_name": [],
-        "constant_value": [],
-    }
-)
+GLOBAL_ENUMS_DATA = {
+    "orign_enum_name": [],
+    "converted_enum_name": [],
+    "enum_constant_name": [],
+    "constant_value": [],
+}
 
 
-def find_records(df, condition_dict) -> pd.DataFrame:
+def find_records(df, condition_dict) -> list[dict[str, Any]]:
     """
     根据字典条件查找匹配的记录
-    :param df: 目标DataFrame
+    :param df: 列名到值列表的字典
     :param condition_dict: 查询条件字典，如 {"cls_name": "MyClass", "enum_name": "Color"}
-    :return: 匹配的DataFrame子集
+    :return: 匹配的记录列表
     """
-    if not condition_dict:
-        return df.copy()
-
-    # 构建多条件布尔索引
-    condition = pd.Series(True, index=df.index)
-    for col, val in condition_dict.items():
-        if col in df.columns:
-            condition &= df[col] == val
-    return df[condition].copy()
+    records = (dict(zip(df, values)) for values in zip(*df.values()))
+    return [
+        record for record in records
+        if all(record[col] == val for col, val in condition_dict.items() if col in df)
+    ]
 
 
 def update_records(df, condition_dict, update_dict):
     """
     更新匹配条件的记录
-    :param df: 目标DataFrame (CLASS_ENUM_DATA)
+    :param df: 列名到值列表的字典 (CLASS_ENUM_DATA)
     :param condition_dict: 筛选条件字典
     :param update_dict: 更新字段字典，如 {"constant_value": 100, "enum_name": "NewName"}
     """
     if not condition_dict or not update_dict:
         return
 
-    # 定位目标行
-    condition = pd.Series(True, index=df.index)
-    for col, val in condition_dict.items():
-        if col in df.columns:
-            condition &= df[col] == val
-
-    # 批量更新字段 [1,9,11](@ref)
-    for col, new_val in update_dict.items():
-        if col in df.columns:
-            df.loc[condition, col] = new_val
+    for index, values in enumerate(zip(*df.values())):
+        record = dict(zip(df, values))
+        if all(record[col] == val for col, val in condition_dict.items() if col in df):
+            for col, new_val in update_dict.items():
+                if col in df:
+                    df[col][index] = new_val
 
 
 def append_records(
-    df: pd.DataFrame, new_records: list[dict[str, Any]] | dict[str, Any]
-) -> pd.DataFrame:
+    df: dict[str, list[Any]], new_records: list[dict[str, Any]] | dict[str, Any]
+) -> dict[str, list[Any]]:
     """
-    追加新记录到DataFrame
-    :param df: 目标DataFrame
+    追加新记录到表中
+    :param df: 列名到值列表的字典
     :param new_records: 新记录列表，每个元素为字段字典
-    :return: 追加后的DataFrame（原DataFrame会被修改）
+    :return: 追加后的表（原字典会被修改）
     """
-    required_columns = df.columns
+    required_columns = df.keys()
     new_records = new_records if isinstance(new_records, list) else [new_records]
     for record in new_records:
         # 验证记录完整性
@@ -306,7 +293,8 @@ def append_records(
             raise ValueError(f"Missing required columns: {missing}")
 
         # 追加记录
-        df.loc[len(df)] = [record[col] for col in required_columns]
+        for col in required_columns:
+            df[col].append(record[col])
 
     return df
 
@@ -342,14 +330,12 @@ NOT_SUPPORTED_OPERATORS = {
     "!=": "__ne__",
 }
 
-BUILTIN_CLASSES_SUPPORTED_OPERATOR_DATA = pd.DataFrame(
-    {
-        "orign_cls_name": [],  # 原始的类名
-        "cls_name": [],  # 转换后的类名
-        "orign_op_name": [],  # 原始的运算符名称
-        "op_name": [],  # 转换后的运算符名称
-    }
-)
+BUILTIN_CLASSES_SUPPORTED_OPERATOR_DATA = {
+    "orign_cls_name": [],  # 原始的类名
+    "cls_name": [],  # 转换后的类名
+    "orign_op_name": [],  # 原始的运算符名称
+    "op_name": [],  # 转换后的运算符名称
+}
 
 
 def is_supported_operator(op: str) -> bool:
@@ -376,11 +362,11 @@ def convert_operator_to_method_name(op: str) -> str:
 
 
 
-ALIAS_CLASS_DATA = pd.DataFrame({
+ALIAS_CLASS_DATA = {
     "cls_name": [],  # e.g. "Vector2"
     "alternative_cls_name": [],  # e.g. "vec2""
     "module_abs_path": [],  # e.g. "vmath" (由于vmath可以通过 import vmath 导入, 因此模块路径就是 "vmath")
-})
+}
 append_records(ALIAS_CLASS_DATA, [
     {"cls_name": "Vector2",     "alternative_cls_name": "vec2",     "module_abs_path": "vmath"},
     {"cls_name": "Vector2i",    "alternative_cls_name": "vec2i",    "module_abs_path": "vmath"},
@@ -391,5 +377,4 @@ append_records(ALIAS_CLASS_DATA, [
     {"cls_name": "NodePath",    "alternative_cls_name": "str",      "module_abs_path": ""},
     {"cls_name": "StringName",  "alternative_cls_name": "str",      "module_abs_path": ""},
 ])
-
 

@@ -281,7 +281,7 @@ from ._init import *
                         arg_type = converters.convert_type_name(arg.type)
                         # arg_name += arg_type
                         arg_type_is_alias = arg_type in list(
-                            converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                            converters.ALIAS_CLASS_DATA["cls_name"]
                         )
 
                         arg_default_value = None
@@ -395,7 +395,7 @@ from ._init import *
                         right_type = converters.convert_type_name(right_type)
                         
                     right_type_is_alias = right_type in list(
-                        converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                        converters.ALIAS_CLASS_DATA["cls_name"]
                     )
 
                     if converters.is_overload_operator(class_name, operator_name):
@@ -445,7 +445,7 @@ from ._init import *
                     arg_name = converters.convert_keyword_name(arg.name)
                     arg_type = converters.convert_type_name(arg.type)
                     arg_type_is_alias = arg_type in list(
-                        converters.ALIAS_CLASS_DATA.loc[:, "cls_name"]
+                        converters.ALIAS_CLASS_DATA["cls_name"]
                     )
 
                     if arg.default_value:
@@ -494,7 +494,7 @@ from ._init import *
 
 def gen_alias_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
 
-    modules = map(str, set(converters.ALIAS_CLASS_DATA.loc[:, "module_abs_path"]))
+    modules = map(str, set(converters.ALIAS_CLASS_DATA["module_abs_path"]))
     modules = [module for module in modules if module != ""]
     
     pyi_writer.write(
@@ -515,18 +515,18 @@ from . import variants
             alternative_cls_with_module_exprs: list[str] = (
                 []
             )  # ["vmath.vec2", "vmath.vec3", ...]
-            for _, record in found_records.iterrows():
-                module = record.loc["module_abs_path"] if record.loc["module_abs_path"] != "" else None
+            for record in found_records:
+                module = record["module_abs_path"] if record["module_abs_path"] != "" else None
                 
                 if module is None:
                     alternative_cls_with_module_exprs.append(
-                        record.loc["alternative_cls_name"]
+                        record["alternative_cls_name"]
                     )
                 else:
                     alternative_cls_with_module_exprs.append(
-                        record.loc["module_abs_path"]
+                        record["module_abs_path"]
                         + "."
-                        + record.loc["alternative_cls_name"]
+                        + record["alternative_cls_name"]
                     )
 
             pyi_writer.writefmt(

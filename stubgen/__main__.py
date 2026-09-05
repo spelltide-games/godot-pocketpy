@@ -1,9 +1,19 @@
 from stubgen.parse import *
 from stubgen.map import *
 from stubgen.export import *
+import argparse
 import os
 import shutil
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--with-sbx', action='store_true',
+                    help='Include SBX typing stubs in the generated typings')
+args = parser.parse_args()
+
+SBX_CPP_TYPINGS = 'sbx_extension/typings/sbxcpp'
+if args.with_sbx and not os.path.isdir(SBX_CPP_TYPINGS):
+    parser.error('SBX typings are missing. Run: git submodule update --init --recursive sbx_extension')
 
 EXTENSION_API_PATH = 'godot-cpp/gdextension/extension_api.json'
 
@@ -25,6 +35,5 @@ export_writer(map_result.c_writer, 'src/lang/BindingsGenerated.cpp')
 for path, writer in map_result.pyi_writers.items():
     export_writer(writer, f'{GODOT_TYPINGS_PATH}/{path}')
 
-# copy sbxcpp
-SBX_CPP_TYPINGS = 'sbx_extension/typings/sbxcpp'
-shutil.copytree(SBX_CPP_TYPINGS, f'{TYPINGS_PATH}/sbxcpp')
+if args.with_sbx:
+    shutil.copytree(SBX_CPP_TYPINGS, f'{TYPINGS_PATH}/sbxcpp')

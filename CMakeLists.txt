@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.17)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+option(GODOT_POCKETPY_WITH_SBX "Build the SBX extension" OFF)
+
 # Build pocketpy
 option(PK_ENABLE_OS "" OFF)
 option(PK_ENABLE_THREADS "" OFF)
@@ -67,6 +69,7 @@ target_sources(${LIBNAME}
     PRIVATE
     src/register_types.cpp
     src/register_types.h
+    src/extensions.hpp
     ${LANG_SRC}
     ${SUPPORT_SRC}
 )
@@ -81,13 +84,26 @@ else()
     add_compile_options(/wd4996)
 endif()
 
-add_subdirectory(sbx_extension)
-
 target_link_libraries(${LIBNAME} PRIVATE
     godot-cpp
     pocketpy
-    sbx_extension
 )
+
+if(GODOT_POCKETPY_WITH_SBX)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sbx_extension/CMakeLists.txt")
+        message(FATAL_ERROR
+            "SBX is enabled but its sources are missing. Run: "
+            "git submodule update --init --recursive sbx_extension")
+    endif()
+    if(NOT TARGET lz4 OR NOT TARGET msgpack)
+        message(FATAL_ERROR
+            "SBX requires PK_BUILD_MODULE_LZ4=ON and PK_BUILD_MODULE_MSGPACK=ON.")
+    endif()
+
+    add_subdirectory(sbx_extension)
+    target_link_libraries(${LIBNAME} PRIVATE sbx_extension)
+    target_compile_definitions(${LIBNAME} PRIVATE GODOT_POCKETPY_WITH_SBX=1)
+endif()
 
 set(GODOT_PROJECT_BINARY_DIR "${PROJECT_SOURCE_DIR}/${GODOT_PROJECT_DIR}/addons/godot-pocketpy/bin/${GODOTCPP_PLATFORM}")
 

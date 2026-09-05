@@ -12,6 +12,9 @@ on:
       - '**.md'
       - '**.json'
 
+env:
+  GODOT_POCKETPY_WITH_SBX: "ON"
+
 jobs:
   build_win32:
     runs-on: windows-latest
@@ -30,9 +33,8 @@ jobs:
     - name: Compile
       shell: bash
       run: |
-        python -m pip install pandas
-        python -m stubgen
-        python build.py --config Release --platform win32
+        python -m stubgen ${{ env.GODOT_POCKETPY_WITH_SBX == 'ON' && '--with-sbx' || '' }}
+        python build.py --config Release --platform win32 --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=${{ env.GODOT_POCKETPY_WITH_SBX }}
     - uses: actions/upload-artifact@v4
       with:
         name: windows
@@ -52,9 +54,8 @@ jobs:
           cmake-version: '3.26.x'
       - name: Compile
         run: |
-          python -m pip install pandas
-          python -m stubgen
-          python build.py --config Release --platform macos
+          python -m stubgen ${{ env.GODOT_POCKETPY_WITH_SBX == 'ON' && '--with-sbx' || '' }}
+          python build.py --config Release --platform macos --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=${{ env.GODOT_POCKETPY_WITH_SBX }}
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -80,9 +81,8 @@ jobs:
           add-to-path: false
       - name: Compile
         run: |
-          python -m pip install pandas
-          python -m stubgen
-          python build.py --config Release --platform android
+          python -m stubgen ${{ env.GODOT_POCKETPY_WITH_SBX == 'ON' && '--with-sbx' || '' }}
+          python build.py --config Release --platform android --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=${{ env.GODOT_POCKETPY_WITH_SBX }}
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - uses: actions/upload-artifact@v4
@@ -104,9 +104,8 @@ jobs:
           cmake-version: '3.26.x'
       - name: Compile
         run: |
-          python -m pip install pandas
-          python -m stubgen
-          python build.py --config Release --platform ios
+          python -m stubgen ${{ env.GODOT_POCKETPY_WITH_SBX == 'ON' && '--with-sbx' || '' }}
+          python build.py --config Release --platform ios --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=${{ env.GODOT_POCKETPY_WITH_SBX }}
       - uses: actions/upload-artifact@v4
         with:
           name: ios
@@ -123,8 +122,7 @@ jobs:
           python-version: '3.10'
       - name: "Run stubgen"
         run: |
-          python -m pip install pandas
-          python -m stubgen
+          python -m stubgen ${{ env.GODOT_POCKETPY_WITH_SBX == 'ON' && '--with-sbx' || '' }}
           mkdir -p demo/addons/godot-pocketpy/bin
           # remove .gitignore
           rm -f .gitignore

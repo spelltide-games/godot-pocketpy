@@ -10,7 +10,7 @@
 #include <godot_cpp/variant/callable_custom.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-#include "sbx.hpp"
+#include "../extensions.hpp"
 
 namespace pkpy {
 
@@ -538,7 +538,7 @@ void setup_python_bindings() {
 
 	setup_awaitables();
 
-	sbx::setup_sbx_python_modules();
+	extensions::setup_python_modules();
 
 	printf("==> setup_python_bindings() done!\n");
 }

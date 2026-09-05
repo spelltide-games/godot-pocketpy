@@ -55,3 +55,49 @@ python build.py
 To test the debug build, you need to open `demo/addons/godot-pocketpy/godot-pocketpy.gdextension`,
 find your platform and replace `template_release` with `template_debug`.
 In this way, the Godot Editor can load the debug version of the extension.
+
+### Optional native extensions
+
+SBX is disabled by default for new builds. Enable it to use `sbxcpp.*`, the
+`MessagePack` and `SpaceDebugDraw` Godot classes, and the SBX demo scenes:
+
+```sh
+git submodule update --init --recursive sbx_extension
+python -m stubgen --with-sbx
+python build.py --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=ON
+```
+
+The equivalent CMake commands, after running stubgen, are:
+
+```sh
+cmake -S . -B build -DGODOT_POCKETPY_WITH_SBX=ON
+cmake --build build --config Debug
+```
+
+CMake remembers options in the build directory. To disable SBX in an existing build:
+
+```sh
+python -m stubgen
+python build.py --cmake-arg=-DGODOT_POCKETPY_WITH_SBX=OFF
+```
+
+When disabled, the build does not require the `sbx_extension` submodule and excludes
+its sources, LevelDB, KCP, and runtime registrations. PocketPy's own LZ4 and msgpack
+modules remain controlled by `PK_BUILD_MODULE_LZ4` and `PK_BUILD_MODULE_MSGPACK`;
+both must be enabled when using SBX.
+
+Run stubgen before building. Pass `--with-sbx` to include the `sbxcpp` typings.
+Without this flag, stubgen regenerates only the base typings and removes any
+previously copied `sbxcpp` typings. Typing generation and the CMake build option
+are controlled separately.
+CI uses `GODOT_POCKETPY_WITH_SBX` (`ON` by default) to select both the compiled
+extension and its typings.
+
+`--cmake-arg` can be repeated to pass additional CMake configure arguments. Quote
+the whole argument when its value contains spaces, for example
+`"--cmake-arg=-DGODOT_PROJECT_DIR=demo project"`.
+
+To add another native extension, define an option and conditionally add/link its
+target in the root CMake file, then add its guarded registration calls to
+`src/extensions.hpp`. Keep the Godot and Python registration stages separate.
+Extensions with typing packages can add an explicit option to `stubgen`.

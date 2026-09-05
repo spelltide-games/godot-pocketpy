@@ -12,7 +12,7 @@
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
 
-#include "sbx.hpp"
+#include "extensions.hpp"
 
 using namespace godot;
 using namespace pkpy;
@@ -35,7 +35,7 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 		printf("==> pocketpy initialized.\n");
 
-		sbx::setup_sbx_godot_classes();
+		extensions::setup_godot_classes();
 		
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		ClassDB::register_class<PythonEditorPlugin>();
