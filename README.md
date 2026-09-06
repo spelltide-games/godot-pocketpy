@@ -16,7 +16,7 @@ A Python script works like a GDScript one: attach it to a node, export propertie
 
 1. Open the [Actions page](https://github.com/pocketpy/godot-pocketpy/actions) and click the latest successful `build` run.
 2. Download the **`godot-pocketpy`** artifact at the bottom of the run page (GitHub requires you to be signed in to download artifacts). It already contains release binaries for every platform.
-3. Unzip it into your project so that the folder ends up at `res://addons/godot-pocketpy`:
+3. Unzip it at the **root of your Godot project** (next to `project.godot`). The zip already carries the `addons/` folder, so the files land where Godot expects them:
 
    ```
    res://addons/godot-pocketpy/
@@ -93,7 +93,7 @@ class MyClass(Extends(Node)):
 
 ![demo_script](docs/assets/demo_script.png)
 
-The [`demo/`](demo) folder is a Godot project that exercises everything described below; it is the quickest reference when something does not behave as you expect. (It runs against a locally built extension — see [Dev Instructions](#dev-instructions) — or you can drop the downloaded artifact into `demo/addons/godot-pocketpy`.)
+The [`demo/`](demo) folder is a Godot project that exercises everything described below; it is the quickest reference when something does not behave as you expect. (It runs against a locally built extension — see [Dev Instructions](#dev-instructions) — or you can unzip the downloaded artifact at the root of `demo/`.)
 
 ### 4. Scripting essentials
 

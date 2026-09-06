@@ -210,8 +210,14 @@ jobs:
           git rev-parse HEAD > demo/addons/godot-pocketpy/GIT_COMMIT_HASH.txt
           cat demo/addons/godot-pocketpy/GIT_COMMIT_HASH.txt
 
+      - name: "Stage artifact layout"
+        run: |
+          mkdir -p dist/addons
+          mv demo/addons/godot-pocketpy dist/addons/godot-pocketpy
+          find dist -maxdepth 3
+
       - name: "Upload merged artifact"
         uses: actions/upload-artifact@v4.3.3
         with:
           name: godot-pocketpy
-          path: demo/addons/godot-pocketpy
+          path: dist
