@@ -13,17 +13,18 @@
 #include "lang/PythonScriptResourceFormatSaver.hpp"
 
 #include "extensions.hpp"
+#include "support/DebugPrint.hpp"
 
 using namespace godot;
 using namespace pkpy;
 
 static void initialize(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-		printf("==> initializing pocketpy...\n");
+		debug_print("==> initializing pocketpy...\n");
 
 		py_initialize();
 
-		printf("==> registering pocketpy classes...\n");
+		debug_print("==> registering pocketpy classes...\n");
 
 		ClassDB::register_abstract_class<PythonScript>();
 		ClassDB::register_abstract_class<PythonScriptLanguage>();
@@ -33,7 +34,7 @@ static void initialize(ModuleInitializationLevel p_level) {
 		PythonScriptResourceFormatLoader::register_in_godot();
 		PythonScriptResourceFormatSaver::register_in_godot();
 
-		printf("==> pocketpy initialized.\n");
+		debug_print("==> pocketpy initialized.\n");
 
 		extensions::setup_godot_classes();
 		
@@ -45,18 +46,18 @@ static void initialize(ModuleInitializationLevel p_level) {
 
 static void uninitialize(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-		printf("==> unregistering pocketpy classes...\n");
+		debug_print("==> unregistering pocketpy classes...\n");
 		PythonScriptResourceFormatSaver::unregister_in_godot();
 		PythonScriptResourceFormatLoader::unregister_in_godot();
 		PythonScriptLanguage::delete_singleton();
 
 		PythonScript::dispose();
-		printf("==> disposing contexts...\n");
+		debug_print("==> disposing contexts...\n");
 		dispose_contexts();
 
-		printf("==> finalizing pocketpy...\n");
+		debug_print("==> finalizing pocketpy...\n");
 		py_finalize();
-		printf("==> pocketpy uninitialized.\n");
+		debug_print("==> pocketpy uninitialized.\n");
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		EditorPlugins::remove_by_type<PythonEditorPlugin>();
 	}

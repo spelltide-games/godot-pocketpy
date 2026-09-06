@@ -7,6 +7,7 @@
 
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include "DebugPrint.hpp"
 
 using namespace godot;
 
@@ -45,7 +46,7 @@ void pk_names_initialize() {
 	py_Name t1 = py_name("__init__");
 	py_Name t2 = py_name("__init__");
 	if (t1 != t2) {
-		printf("py_name() is buggy: %p != %p\n", t1, t2);
+		pkpy::debug_print("py_name() is buggy: %p != %p\n", t1, t2);
 		std::abort();
 	}
 }

@@ -11,6 +11,7 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include "../extensions.hpp"
+#include "../support/DebugPrint.hpp"
 
 namespace pkpy {
 
@@ -540,7 +541,7 @@ void setup_python_bindings() {
 
 	extensions::setup_python_modules();
 
-	printf("==> setup_python_bindings() done!\n");
+	debug_print("==> setup_python_bindings() done!\n");
 }
 
 } //namespace pkpy

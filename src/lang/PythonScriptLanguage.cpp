@@ -35,6 +35,8 @@ String PythonScriptLanguage::_get_extension() const {
 }
 
 void PythonScriptLanguage::_finish() {
+	// No more frames after this, so anyone still waiting would wait forever.
+	reload_pump.shutdown();
 }
 
 PackedStringArray PythonScriptLanguage::_get_reserved_words() const {
@@ -280,6 +282,7 @@ int32_t PythonScriptLanguage::_profiling_get_frame_data(ScriptLanguageExtensionP
 }
 
 void PythonScriptLanguage::_frame() {
+	reload_pump.drain();
 }
 
 bool PythonScriptLanguage::_handles_global_class_type(const String &type) const {
@@ -331,6 +334,7 @@ PythonScriptLanguage *PythonScriptLanguage::get_or_create_singleton() {
 
 void PythonScriptLanguage::delete_singleton() {
 	if (instance) {
+		// The pump quiesces in ~MainThreadReloadPump, reached via memdelete below.
 		Engine::get_singleton()->unregister_script_language(instance);
 		memdelete(instance);
 		instance = nullptr;

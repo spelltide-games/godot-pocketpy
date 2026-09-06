@@ -9,6 +9,8 @@
 #include "Common.hpp"
 #include "PythonScriptLanguage.hpp"
 
+#include <atomic>
+
 using namespace godot;
 
 namespace pkpy {
@@ -56,6 +58,10 @@ public:
 	String _get_source_code() const override;
 	void _set_source_code(const String &p_code) override;
 	Error _reload(bool p_keep_state) override;
+
+	// The actual compile. Must run on the main thread; `_reload()` is the
+	// dispatcher that guarantees it. Public so `MainThreadReloadPump` can call it.
+	Error reload_impl();
 	TypedArray<Dictionary> _get_documentation() const override;
 	String _get_class_icon_path() const override;
 	bool _has_method(const StringName &p_method) const override;
@@ -111,6 +117,13 @@ protected:
 	String source_code;
 
 	bool placeholder_fallback_enabled;
+
+	// Hash of (source_code, path) as of the last *successful* compile; 0 means
+	// "never compiled successfully". Read from worker threads before the main
+	// thread hand-off, hence atomic.
+	std::atomic<uint64_t> compiled_fingerprint{ 0 };
+
+	uint64_t current_fingerprint() const;
 
 	// TODO: use instance member instead of static map if "_placeholder_instance_create" is changed to be non-const
 	static HashMap<const PythonScript *, HashSet<void *>> placeholders;

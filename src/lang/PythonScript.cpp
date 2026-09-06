@@ -1,6 +1,7 @@
 #include "PythonScript.hpp"
 
 #include "PythonScriptInstance.hpp"
+#include "../support/DebugPrint.hpp"
 #include "PythonScriptLanguage.hpp"
 
 #include "gdextension_interface.h"
@@ -131,23 +132,64 @@ void PythonScript::_set_source_code(const String &code) {
 	source_code = code;
 }
 
+uint64_t PythonScript::current_fingerprint() const {
+	// Path participates: `basename` drives the module name and the duplicate-class
+	// check, so the same source at a new path must recompile.
+	const uint64_t src = (uint64_t)(uint32_t)source_code.hash();
+	const uint64_t path = (uint64_t)(uint32_t)get_path().hash();
+	const uint64_t h = (src << 32) ^ path;
+	return h ? h : 1; // 0 is reserved for "never compiled"
+}
+
 Error PythonScript::_reload(bool keep_state) {
+	// Ignored, and not passed on: py_exec() runs in RELOAD_MODE, which re-execs the
+	// module without allocating new types, so live instances survive either way.
+	// There is no "discard state" variant to select.
 	(void)keep_state;
 
-	std::thread::id tid = std::this_thread::get_id();
+	// Fast path, deliberately ahead of the thread check so a worker re-loading an
+	// already-compiled script skips the hand-off entirely.
+	//
+	// A non-zero fingerprint is only stored on reload_impl()'s success path, so it
+	// implies meta.is_valid -- reading `meta` here instead would race the main
+	// thread's `meta = std::move(new_meta)`.
+	//
+	// Tracks only this script's own source: a changed module it imports will not
+	// retrigger, but neither did the old code (import hits pocketpy's cache).
+	if (compiled_fingerprint.load() == current_fingerprint()) {
+		return OK;
+	}
 
-	printf(
-			"=> PythonScript.reload(): %s, %p, tid=%lld\n",
-			get_path().utf8().get_data(),
-			this,
-			(long long)std::hash<std::thread::id>()(tid));
+	if (std::this_thread::get_id() == pyctx()->main_thread_id) {
+		return reload_impl();
+	}
 
-	if (tid != pyctx()->main_thread_id) {
-		if (!Engine::get_singleton()->is_editor_hint()) {
-			ERR_PRINT("PythonScript.reload() must be called from the main thread!");
-		}
+	// See MainThreadReloadPump for why the editor gets a hand-off and the runtime
+	// does not.
+	if (!Engine::get_singleton()->is_editor_hint()) {
+		ERR_PRINT("PythonScript.reload() must be called from the main thread: " + get_path());
 		return ERR_UNAVAILABLE;
 	}
+	PythonScriptLanguage *lang = PythonScriptLanguage::get_singleton();
+	if (!lang) {
+		return ERR_UNAVAILABLE; // language already torn down
+	}
+	return lang->reload_pump.request(this);
+}
+
+Error PythonScript::reload_impl() {
+	// Guaranteed by _reload(): main-thread calls land here directly, off-thread ones
+	// go through MainThreadReloadPump first.
+	ERR_FAIL_COND_V_MSG(std::this_thread::get_id() != pyctx()->main_thread_id,
+			ERR_UNAVAILABLE,
+			"PythonScript::reload_impl() must run on the main thread: " + get_path());
+
+	// Only real compiles reach here; _reload()'s fast path filters the repeats.
+	debug_print("=> PythonScript.reload(): %s, %p\n", get_path().utf8().get_data(), this);
+
+	// Cleared first so every early return below leaves it at 0; only the success
+	// path at the end restores it. That is what makes non-zero imply meta.is_valid.
+	compiled_fingerprint.store(0);
 
 	placeholder_fallback_enabled = true;
 	meta.is_valid = false;
@@ -155,6 +197,9 @@ Error PythonScript::_reload(bool keep_state) {
 
 	String basename = get_path().get_file().get_basename();
 	if (basename.is_empty() || !has_source_code()) {
+		// Fingerprint stays 0: this returns OK but leaves `meta` invalid, and recording
+		// it would let the fast path skip a needed recompile later (path cleared, then
+		// restored). Re-running this branch is ~free.
 		return OK;
 	}
 	auto path_cstr = get_path().utf8();
@@ -285,6 +330,8 @@ Error PythonScript::_reload(bool keep_state) {
 		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
 		runtime_type_to_script[exposed_type] = this;
 	}
+
+	compiled_fingerprint.store(current_fingerprint());
 
 	pyctx()->reloading_contexts.pop();
 	return OK;

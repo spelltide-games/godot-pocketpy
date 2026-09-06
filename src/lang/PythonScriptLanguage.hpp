@@ -3,6 +3,8 @@
 #include <godot_cpp/classes/script.hpp>
 #include <godot_cpp/classes/script_language_extension.hpp>
 
+#include "MainThreadReloadPump.hpp"
+
 using namespace godot;
 
 namespace pkpy {
@@ -74,6 +76,9 @@ public:
 	static PythonScriptLanguage *get_singleton();
 	static PythonScriptLanguage *get_or_create_singleton();
 	static void delete_singleton();
+
+	// Hands an off-main-thread reload to _frame(). See MainThreadReloadPump.
+	MainThreadReloadPump reload_pump;
 
 protected:
 	static void _bind_methods();

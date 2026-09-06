@@ -12,7 +12,7 @@ z = 4.8
 
 [node name="py_node" type="Node" parent="." unique_id=420174823 node_paths=PackedStringArray("y")]
 script = ExtResource("2_0xm2m")
-z = 4.8
 y = NodePath("../gds_node")
+z = 4.8
 
 [connection signal="health_changed" from="py_node" to="gds_node" method="_on_py_node_health_changed"]
