@@ -1,7 +1,7 @@
 #include "PythonScript.hpp"
 
-#include "PythonScriptInstance.hpp"
 #include "../support/DebugPrint.hpp"
+#include "PythonScriptInstance.hpp"
 #include "PythonScriptLanguage.hpp"
 
 #include "gdextension_interface.h"
@@ -252,39 +252,70 @@ Error PythonScript::reload_impl() {
 		pyctx()->reloading_contexts.pop();
 		return ERR_COMPILATION_FAILED;
 	}
+	Vector<py_Type> classes;
+	for (py_Type t = exposed_type; t != pyctx()->tp_Script; t = py_tpbase(t)) {
+		classes.push_back(t);
+	}
 
 	// promote `exposed_class` variable from `py_ItemRef` into `py_GlobalRef`
 	exposed_class = py_tpobject(exposed_type);
 
-	Vector<DefineStatement *> defines;
+	struct DefineStatementWithOffset {
+		DefineStatement *d;
+		int offset;
+		DefineStatementWithOffset(DefineStatement *d, int offset) :
+				d(d), offset(offset) {}
+		int index() const { return d->index + offset; }
+	};
 
-	std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> ctx_pair = { &defines, &new_meta };
+	Vector<DefineStatementWithOffset> defines;
 
-	py_Type t = exposed_type;
-	while (t != pyctx()->tp_Script) {
+	struct DefinesContext {
+		Vector<DefineStatementWithOffset> *defines;
+		PythonScriptMeta *new_meta;
+		int offset;
+		DefinesContext(Vector<DefineStatementWithOffset> *defines, PythonScriptMeta *new_meta, int offset) :
+				defines(defines), new_meta(new_meta), offset(offset) {}
+	};
+
+	for (int i = classes.size() - 1; i >= 0; i--) {
+		py_Type t = classes[i];
+		DefinesContext ctx1(&defines, &new_meta, defines.size());
 		py_applydict(
 				py_tpobject(t), [](py_Name name, py_ItemRef value, void *ctx) -> bool {
-					auto ctx_pair = (std::pair<Vector<DefineStatement *> *, PythonScriptMeta *> *)ctx;
-					Vector<DefineStatement *> *defines = ctx_pair->first;
-					PythonScriptMeta *new_meta = ctx_pair->second;
+					DefinesContext *ctx1 = (DefinesContext *)ctx;
 					StringName name_godot = python_name_to_godot(name);
 
 					if (py_istype(value, pyctx()->tp_DefineStatement)) {
 						DefineStatement *d = (DefineStatement *)py_touserdata(value);
 						d->name = name_godot;
-						defines->push_back(d);
+						ctx1->defines->push_back(DefineStatementWithOffset(d, ctx1->offset));
 					} else if (py_istype(value, tp_function)) {
-						new_meta->methods[name_godot] = 0;
+						ctx1->new_meta->methods[name_godot] = 0;
 					}
 					return true;
 				},
-				&ctx_pair);
-		t = py_tpbase(t);
+				&ctx1);
 	}
 
 	// sort() would compare the pointers themselves, not the declaration order
-	struct ByIndex { bool operator()(const DefineStatement *a, const DefineStatement *b) const { return a->index < b->index; } };
+	struct ByIndex {
+		bool operator()(DefineStatementWithOffset a, DefineStatementWithOffset b) const {
+			return a.index() < b.index();
+		}
+	};
 	defines.sort_custom<ByIndex>();
+
+	HashSet<String> member_names;
+	for (const DefineStatementWithOffset &dw : defines) {
+		DefineStatement *d = dw.d;
+		if (member_names.has(d->name)) {
+			ERR_PRINT("Duplicate member: '" + String(d->name) + "' in " + get_path());
+			pyctx()->reloading_contexts.pop();
+			return ERR_COMPILATION_FAILED;
+		}
+		member_names.insert(d->name);
+	}
 
 	if (ctx->extends.is_empty()) {
 		ERR_PRINT("Failed to find base class for " + get_path());
@@ -303,7 +334,8 @@ Error PythonScript::reload_impl() {
 		new_meta.property_list.push_back(Dictionary(category));
 	}
 
-	for (DefineStatement *d : defines) {
+	for (DefineStatementWithOffset dw : defines) {
+		DefineStatement *d = dw.d;
 		if (d->is_signal()) {
 			SignalStatement *s = (SignalStatement *)d;
 			new_meta.signals[s->name] = s->arguments;

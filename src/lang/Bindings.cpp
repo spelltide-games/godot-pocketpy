@@ -465,20 +465,20 @@ void setup_python_bindings() {
 	py_tpsetfinal(type);
 	py_tphookattributes(type, Variant_getattribute, Variant_setattribute, NULL, Variant_getunboundmethod);
 
-	py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
-		Variant self = to_variant_exact(&argv[0]);
-		if (self.get_type() != Variant::CALLABLE) {
-			return TypeError("Variant type is not Variant::CALLABLE");
-		}
-		Callable callable(self);
-		Array godot_args;
-		for (int i = 1; i < argc; i++) {
-			godot_args.push_back(py_tovariant(&argv[i]));
-		}
-		Variant res = callable.callv(godot_args);
-		py_newvariant(py_retval(), &res);
-		return true;
-	});
+	// py_bindmethod(type, "__call__", [](int argc, py_Ref argv) -> bool {
+	// 	Variant self = to_variant_exact(&argv[0]);
+	// 	if (self.get_type() != Variant::CALLABLE) {
+	// 		return TypeError("Variant type is not Variant::CALLABLE");
+	// 	}
+	// 	Callable callable(self);
+	// 	Array godot_args;
+	// 	for (int i = 1; i < argc; i++) {
+	// 		godot_args.push_back(py_tovariant(&argv[i]));
+	// 	}
+	// 	Variant res = callable.callv(godot_args);
+	// 	py_newvariant(py_retval(), &res);
+	// 	return true;
+	// });
 
 	py_bindmethod(type, "__getitem__", [](int argc, py_Ref argv) -> bool {
 		Variant self = to_variant_exact(&argv[0]);
