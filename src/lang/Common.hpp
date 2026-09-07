@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gdextension_interface.h"
+#include "godot_cpp/core/property_info.hpp"
 #include "godot_cpp/variant/callable.hpp"
 #include "pocketpy.h"
 
@@ -151,7 +152,10 @@ struct DefineStatement {
 };
 
 struct ExportStatement : DefineStatement {
-	String template_;
+	// Everything Godot needs for the property, resolved when `export()` runs.
+	// `property.name` stays empty until the class body is walked, because that is
+	// where the field the statement was assigned to becomes known.
+	PropertyInfo property;
 	Variant default_value;
 
 	using DefineStatement::DefineStatement;

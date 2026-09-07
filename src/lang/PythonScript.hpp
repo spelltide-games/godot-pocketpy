@@ -1,10 +1,11 @@
 #pragma once
 
-#include "godot_cpp/classes/gd_script.hpp"
 #include "godot_cpp/variant/packed_string_array.hpp"
 #include <godot_cpp/classes/script_extension.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
 
 #include "Common.hpp"
 #include "PythonScriptLanguage.hpp"
@@ -16,23 +17,28 @@ using namespace godot;
 namespace pkpy {
 
 struct PythonScriptMeta {
-	Ref<GDScript> gds;
 	py_Type type;
 	StringName class_name;
 	StringName extends;
 	HashMap<StringName, Variant> default_values;
 	HashMap<StringName, int> methods;
 	HashMap<StringName, PackedStringArray> signals;
+	// Built once per compile, in the shape Godot asks for: arrays of PropertyInfo
+	// and MethodInfo dictionaries, handed straight back from the matching
+	// `_get_script_*_list()` virtuals.
+	TypedArray<Dictionary> property_list;
+	TypedArray<Dictionary> signal_list;
 	bool is_valid;
 
 	PythonScriptMeta() :
-			gds(nullptr),
 			type(0),
 			class_name(),
 			extends(),
 			default_values(),
 			methods(),
 			signals(),
+			property_list(),
+			signal_list(),
 			is_valid(false) {
 	}
 };

@@ -166,12 +166,15 @@ class Player(Extends(Node2D)):
     tint       = export(Color)                      # any built-in Variant type
     scene      = export(PackedScene)
     volume     = export_range(0.0, 1.0, 0.05, default=0.8)
+    charges    = export_range(0, 9, 1, 'or_greater')  # int bounds give an int property
 
     def _ready(self):
         print(self.speed, self.target)
 ```
 
-Accepted types: the Python builtins `int`, `float`, `bool`, `str`; Godot built-in types such as `Vector2`, `Vector3`, `Color`, `Rect2` (from `godot`); and any engine class such as `Node`, `Texture2D`, `PackedScene` (from `godot.classes`).
+Accepted types: the Python builtins `int`, `float`, `bool`, `str`; Godot built-in types such as `Vector2`, `Vector3`, `Color`, `Rect2` (from `godot`); and any engine class such as `Node`, `Texture2D`, `PackedScene` (from `godot.classes`). Engine classes must derive from `Resource` or `Node`, and a `Node` export requires a `Node`-derived script — the same rule GDScript's `@export` follows.
+
+`export_range()` takes its property type from the bounds: all-`int` bounds give an `int` property, any `float` gives a `float` one. Extra positional strings become GDScript's range hints, e.g. `export_range(0.0, 1.0, 0.05, 'or_greater', 'suffix:m')`.
 
 #### Signals
 
@@ -298,6 +301,7 @@ site-packages/*
 | `Failed to find class 'X' in res://...` | The class name does not match the file name. |
 | `Duplicate class name: X has been defined in both ... and ...` | Two `.py` files share the same file name. Rename one. |
 | `Failed to find base class for res://...` | `Extends(...)` was not evaluated — check that the argument is a class from `godot.classes` or a valid `res://` script path. |
+| `cannot export 'X': expected a Resource or Node subclass` / `... node exports require a Node-derived script` | Only built-in Variant types, `Resource` subclasses and `Node` subclasses are exportable, and a node export needs a `Node`-derived script. |
 | `cannot open file 'res://site-packages/foo.py' when importing 'foo' module` | The module is missing from `res://site-packages/`, or you tried to import a script that lives elsewhere. |
 | Errors about your library modules on editor startup | `res://site-packages/.gdignore` is missing, so Godot is compiling them as scripts. |
 | Exported properties are `None` in `__init__` | Expected — the Inspector values are applied after construction. Read them in `_ready()`. |

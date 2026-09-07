@@ -185,6 +185,32 @@ static bool get_top_ctx(PythonScriptReloadingContext **p_ctx) {
 	return true;
 }
 
+// What GDScript's compiler leaves on an exported member: the annotation's own
+// PROPERTY_USAGE_DEFAULT plus the flag every script-declared property carries.
+static constexpr uint32_t EXPORT_USAGE = PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_SCRIPT_VARIABLE;
+
+// Engine classes are exportable as a reference only, and only in the two shapes
+// `@export` accepts: a Resource or a Node.
+static bool resolve_object_export(const StringName &class_name, const StringName &extends, PropertyInfo *r_property) {
+	if (ClassDB::is_parent_class(class_name, "Resource")) {
+		r_property->hint = PROPERTY_HINT_RESOURCE_TYPE;
+	} else if (ClassDB::is_parent_class(class_name, "Node")) {
+		if (!ClassDB::is_parent_class(extends, "Node")) {
+			// A node export is stored as a path relative to the scene the node lives
+			// in, so there is nothing to resolve it against outside a Node.
+			return TypeError("cannot export '%s': node exports require a Node-derived script, but this one extends '%s'",
+					String(class_name).utf8().get_data(), String(extends).utf8().get_data());
+		}
+		r_property->hint = PROPERTY_HINT_NODE_TYPE;
+	} else {
+		return TypeError("cannot export '%s': expected a Resource or Node subclass", String(class_name).utf8().get_data());
+	}
+	r_property->type = Variant::OBJECT;
+	r_property->class_name = class_name;
+	r_property->hint_string = class_name;
+	return true;
+}
+
 static void setup_exports() {
 	// export
 	pyctx()->tp_DefineStatement = py_newtype("_DefineStatement", tp_object, pyctx()->godot, [](void *ud) {
@@ -198,36 +224,45 @@ static void setup_exports() {
 			return false;
 		}
 
-		StringName type_name;
+		PropertyInfo property;
+		property.usage = EXPORT_USAGE;
 
 		if (py_istype(&argv[0], tp_type)) {
 			py_Type type = py_totype(&argv[0]);
 			switch (type) {
 				case tp_int:
-					type_name = "int";
+					property.type = Variant::INT;
 					break;
 				case tp_float:
-					type_name = "float";
+					property.type = Variant::FLOAT;
 					break;
 				case tp_bool:
-					type_name = "bool";
+					property.type = Variant::BOOL;
 					break;
 				case tp_str:
-					type_name = "String";
+					property.type = Variant::STRING;
 					break;
 				default:
 					return TypeError("cannot export type '%t'", type);
 			}
 		} else if (py_istype(&argv[0], pyctx()->tp_GDNativeClass)) {
-			PY_CHECK_ARG_TYPE(0, pyctx()->tp_GDNativeClass);
-			type_name = to_GDNativeClass(&argv[0]);
+			GDNativeClass *clazz = (GDNativeClass *)py_totrivial(&argv[0]);
+			if (clazz->type == Variant::OBJECT) {
+				if (!resolve_object_export(python_name_to_godot(clazz->name), ctx->extends, &property)) {
+					return false;
+				}
+			} else {
+				// A built-in Variant type (Vector2, Color, ...) needs no hint, exactly
+				// like `@export var x: Vector2` in GDScript.
+				property.type = clazz->type;
+			}
 		} else {
 			return TypeError("expected 'type' or 'GDNativeClass', got '%t'", py_typeof(&argv[0]));
 		}
 
 		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
 		new (ud) ExportStatement(ctx->next_index());
-		ud->template_ = "@export var ?: " + type_name;
+		ud->property = property;
 		ud->default_value = py_tovariant(&argv[1]);
 		return true;
 	});
@@ -237,16 +272,40 @@ static void setup_exports() {
 		if (!get_top_ctx(&ctx)) {
 			return false;
 		}
-		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
-		new (ud) ExportStatement(ctx->next_index());
 		Variant min = py_tovariant(&argv[0]);
 		Variant max = py_tovariant(&argv[1]);
 		Variant step = py_tovariant(&argv[2]);
 		bool any_is_float = min.get_type() == Variant::FLOAT || max.get_type() == Variant::FLOAT || step.get_type() == Variant::FLOAT;
-		ud->template_ = String("@export_range({0}, {1}, {2}) var ?").format(Array::make(min, max, step));
+
+		// PROPERTY_HINT_RANGE reads as "min,max,step" followed by the bare flags
+		// ("or_greater", "radians_as_degrees", ...) that `*extra_hints` collects.
+		PackedStringArray hints;
+		hints.append(String(min));
+		hints.append(String(max));
+		hints.append(String(step));
+		py_Ref extra_hints = py_arg(3);
+		for (int i = 0; i < py_tuple_len(extra_hints); i++) {
+			py_Ref hint = py_tuple_getitem(extra_hints, i);
+			if (!py_isstr(hint)) {
+				return TypeError("export_range() extra hints must be 'str', got '%t'", py_typeof(hint));
+			}
+			hints.append(String::utf8(py_tostr(hint)));
+		}
+
+		ExportStatement *ud = (ExportStatement *)py_newobject(py_retval(), pyctx()->tp_DefineStatement, 0, sizeof(ExportStatement));
+		new (ud) ExportStatement(ctx->next_index());
+		// The bounds decide the property type; GDScript would take it from the
+		// variable's own annotation, which has no counterpart here.
+		ud->property.type = any_is_float ? Variant::FLOAT : Variant::INT;
+		ud->property.hint = PROPERTY_HINT_RANGE;
+		ud->property.hint_string = String(",").join(hints);
+		ud->property.usage = EXPORT_USAGE;
 		ud->default_value = py_tovariant(&argv[4]);
-		if (any_is_float && ud->default_value.get_type() == Variant::INT) {
+		// The inspector drops a default whose type does not match the property.
+		if (ud->property.type == Variant::FLOAT && ud->default_value.get_type() == Variant::INT) {
 			ud->default_value = (double)ud->default_value;
+		} else if (ud->property.type == Variant::INT && ud->default_value.get_type() == Variant::FLOAT) {
+			ud->default_value = (int64_t)ud->default_value;
 		}
 		return true;
 	});

@@ -9,6 +9,8 @@
 #include "godot_cpp/classes/global_constants.hpp"
 #include "godot_cpp/core/class_db.hpp"
 #include "godot_cpp/core/error_macros.hpp"
+#include "godot_cpp/core/object.hpp"
+#include "godot_cpp/core/property_info.hpp"
 #include "godot_cpp/godot.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/signal.hpp"
@@ -290,30 +292,41 @@ Error PythonScript::reload_impl() {
 		return ERR_COMPILATION_FAILED;
 	}
 
-	PackedStringArray buffer;
-	buffer.push_back("# " + get_path());
-	buffer.push_back("extends " + ctx->extends);
-	buffer.push_back("");
+	// The inspector groups everything after a category header under it, the way
+	// `Script::get_class_category()` does for a GDScript. Leaving `hint_string`
+	// empty marks it a custom category, so the inspector shows it as-is instead of
+	// looking up documentation for a class named after the script.
+	{
+		PropertyInfo category;
+		category.name = String(ctx->class_name) + " (" + itos(exposed_type) + ")";
+		category.usage = PROPERTY_USAGE_CATEGORY;
+		new_meta.property_list.push_back(Dictionary(category));
+	}
+
 	for (DefineStatement *d : defines) {
 		if (d->is_signal()) {
 			SignalStatement *s = (SignalStatement *)d;
-			buffer.append("signal " + s->name + "(" + String(", ").join(s->arguments) + ")");
 			new_meta.signals[s->name] = s->arguments;
+
+			MethodInfo signal_info{ StringName(s->name) };
+			for (const String &argument : s->arguments) {
+				// Untyped, like the parameters of a GDScript `signal foo(a, b)`.
+				PropertyInfo argument_info;
+				argument_info.name = argument;
+				argument_info.usage = PROPERTY_USAGE_NIL_IS_VARIANT;
+				signal_info.arguments.push_back(argument_info);
+			}
+			new_meta.signal_list.push_back(Dictionary(signal_info));
 		} else {
 			ExportStatement *e = (ExportStatement *)d;
-			buffer.append(e->template_.replace("?", e->name));
 			new_meta.default_values[e->name] = e->default_value;
-		}
-	}
 
-	Ref<GDScript> gds = memnew(GDScript);
-	new_meta.gds = gds;
-	new_meta.gds->set_source_code(String("\n").join(buffer));
-	Error err = new_meta.gds->reload(false);
-	if (err != OK) {
-		ERR_PRINT("Failed to compile GDScript: " + itos(err) + "\n" + new_meta.gds->get_source_code());
-		pyctx()->reloading_contexts.pop();
-		return ERR_COMPILATION_FAILED;
+			// `export()` resolved everything but the name, which only the walk above
+			// could tell us.
+			PropertyInfo property = e->property;
+			property.name = e->name;
+			new_meta.property_list.push_back(Dictionary(property));
+		}
 	}
 
 	new_meta.type = exposed_type;
@@ -365,9 +378,9 @@ Dictionary PythonScript::_get_method_info(const StringName &p_method) const {
 }
 
 bool PythonScript::_is_tool() const {
-	if (!_is_valid())
-		return false;
-	return meta.gds->is_tool();
+	// No `@tool` equivalent on the Python side yet. The GDScript shim this used to
+	// delegate to never carried the annotation either, so this always said false.
+	return false;
 }
 
 bool PythonScript::_is_valid() const {
@@ -391,7 +404,7 @@ bool PythonScript::_has_script_signal(const StringName &p_signal) const {
 TypedArray<Dictionary> PythonScript::_get_script_signal_list() const {
 	if (!_is_valid())
 		return {};
-	return meta.gds->get_script_signal_list();
+	return meta.signal_list;
 }
 
 bool PythonScript::_has_property_default_value(const StringName &p_property) const {
@@ -422,15 +435,7 @@ TypedArray<Dictionary> PythonScript::_get_script_method_list() const {
 TypedArray<Dictionary> PythonScript::_get_script_property_list() const {
 	if (!_is_valid())
 		return {};
-	auto retval = meta.gds->get_script_property_list();
-	// category
-	if (!retval.is_empty() && retval[0].get("usage") == Variant(PROPERTY_USAGE_CATEGORY)) {
-		char buf[32];
-		snprintf(buf, sizeof(buf), " (%d)", meta.type);
-		String category = String(meta.class_name) + buf;
-		retval[0].set("name", category);
-	}
-	return retval;
+	return meta.property_list;
 }
 
 int32_t PythonScript::_get_member_line(const StringName &p_member) const {
