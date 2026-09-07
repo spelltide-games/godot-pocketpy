@@ -209,6 +209,7 @@ jobs:
         run: |
           git rev-parse HEAD > demo/addons/godot-pocketpy/GIT_COMMIT_HASH.txt
           cat demo/addons/godot-pocketpy/GIT_COMMIT_HASH.txt
+          cp LICENSE demo/addons/godot-pocketpy/LICENSE.txt
 
       - name: "Stage artifact layout"
         run: |

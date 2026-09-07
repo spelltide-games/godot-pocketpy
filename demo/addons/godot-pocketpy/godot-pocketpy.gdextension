@@ -5,9 +5,6 @@ compatibility_minimum = "4.4"
 reloadable = false
 
 [libraries]
-macos.debug = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
-macos.release = "bin/macos/libgodot-pocketpy.macos.template_release.dylib"
-
 macos.arm64.debug = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
 macos.arm64.release = "bin/macos/libgodot-pocketpy.macos.template_release.arm64.dylib"
 
