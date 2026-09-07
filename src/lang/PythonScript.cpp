@@ -263,6 +263,7 @@ Error PythonScript::reload_impl() {
 	struct DefineStatementWithOffset {
 		DefineStatement *d;
 		int offset;
+		DefineStatementWithOffset(): d(nullptr), offset(0) {}
 		DefineStatementWithOffset(DefineStatement *d, int offset) :
 				d(d), offset(offset) {}
 		int index() const { return d->index + offset; }
