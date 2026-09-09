@@ -11,6 +11,7 @@
 #include "lang/PythonScriptLanguage.hpp"
 #include "lang/PythonScriptResourceFormatLoader.hpp"
 #include "lang/PythonScriptResourceFormatSaver.hpp"
+#include "lang/PythonSyntaxHighlighter.hpp"
 
 #include "extensions.hpp"
 #include "support/DebugPrint.hpp"
@@ -39,7 +40,8 @@ static void initialize(ModuleInitializationLevel p_level) {
 		extensions::setup_godot_classes();
 		
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-		ClassDB::register_class<PythonEditorPlugin>();
+		ClassDB::register_internal_class<PythonSyntaxHighlighter>();
+		ClassDB::register_internal_class<PythonEditorPlugin>();
 		EditorPlugins::add_by_type<PythonEditorPlugin>();
 	}
 }

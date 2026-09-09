@@ -52,6 +52,19 @@ PackedStringArray PythonScriptLanguage::_get_reserved_words() const {
 }
 
 bool PythonScriptLanguage::_is_control_flow_keyword(const String &keyword) const {
+	// Keywords that move the instruction pointer around; the editor paints them
+	// apart from the rest so a block's shape is readable at a glance.
+	static const char *CONTROL_FLOW_KEYWORDS[] = {
+		"assert", "await", "break", "continue", "elif", "else", "except",
+		"finally", "for", "if", "pass", "raise", "return", "try", "while",
+		"with", "yield",
+		nullptr
+	};
+	for (const char **it = CONTROL_FLOW_KEYWORDS; *it != nullptr; it++) {
+		if (keyword == *it) {
+			return true;
+		}
+	}
 	return false;
 }
 

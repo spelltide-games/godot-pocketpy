@@ -1,37 +1,32 @@
 #pragma once
 
+#include <godot_cpp/classes/config_file.hpp>
 #include <godot_cpp/classes/editor_plugin.hpp>
-#include <godot_cpp/classes/editor_interface.hpp>
-#include <godot_cpp/classes/control.hpp>
-#include "PythonScript.hpp"
+#include <godot_cpp/classes/script.hpp>
 
 using namespace godot;
 
 namespace pkpy {
 
 class PythonEditorPlugin : public EditorPlugin {
-    GDCLASS(PythonEditorPlugin, EditorPlugin);
+	GDCLASS(PythonEditorPlugin, EditorPlugin);
 
-    static void _bind_methods() {
-        ClassDB::bind_method(D_METHOD("rebuild_index_file"), &PythonEditorPlugin::rebuild_index_file);
-    }
-
-    void rebuild_index_file() {
-        PythonScript::rebuild_index_file();
-    }
+protected:
+	static void _bind_methods();
 
 public:
+	void _enter_tree() override;
+	void _exit_tree() override;
+	void _set_window_layout(const Ref<ConfigFile> &p_configuration) override;
 
-#define TOOL_ITEM_NAME "Python: Rebuild Scripts Index File"
-    void _enter_tree() override {
-		Callable callable(this, "rebuild_index_file");
-		add_tool_menu_item(TOOL_ITEM_NAME, callable);
-    }
+private:
+	void rebuild_index_file();
 
-    void _exit_tree() override {
-        remove_tool_menu_item(TOOL_ITEM_NAME);
-    }
-#undef TOOL_ITEM_NAME
+	// Gives the script currently shown in the script editor a Python
+	// highlighter, unless it already has one or is not a Python script.
+	void install_syntax_highlighter();
+	void on_editor_script_changed(const Ref<Script> &p_script);
+	void on_editor_settings_changed();
 };
 
-}
+} //namespace pkpy
