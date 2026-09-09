@@ -52,12 +52,18 @@ PackedStringArray PythonScriptLanguage::_get_reserved_words() const {
 }
 
 bool PythonScriptLanguage::_is_control_flow_keyword(const String &keyword) const {
-	// Keywords that move the instruction pointer around; the editor paints them
-	// apart from the rest so a block's shape is readable at a glance.
+	// The same set GDScript reports, minus the keywords Python does not have.
+	//
+	// Deliberately narrower than "every keyword that moves the instruction
+	// pointer": highlighters match keywords one word at a time, so a two word
+	// construct whose halves land in different buckets is drawn in two colors.
+	// Leaving `yield`, `raise`, `try`, `except`, `finally`, `with`, `assert` and
+	// `await` out keeps `yield from`, `raise ... from`, `except ... as` and
+	// `with ... as` in one color. `for ... in` still splits, exactly as it does
+	// in GDScript.
 	static const char *CONTROL_FLOW_KEYWORDS[] = {
-		"assert", "await", "break", "continue", "elif", "else", "except",
-		"finally", "for", "if", "pass", "raise", "return", "try", "while",
-		"with", "yield",
+		"break", "continue", "elif", "else", "for", "if", "pass", "return",
+		"while",
 		nullptr
 	};
 	for (const char **it = CONTROL_FLOW_KEYWORDS; *it != nullptr; it++) {
