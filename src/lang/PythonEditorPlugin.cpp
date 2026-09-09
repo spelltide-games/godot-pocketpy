@@ -113,7 +113,13 @@ void PythonEditorPlugin::install_syntax_highlighter() {
 	// One highlighter per editor: a SyntaxHighlighter caches per line and keeps
 	// a pointer to the TextEdit it belongs to, so sharing one would mix tabs up.
 	Ref<PythonSyntaxHighlighter> highlighter = memnew(PythonSyntaxHighlighter);
-	highlighter->rebuild();
+
+	// Bind the inner tokenizer to this editor before handing over. Extensions
+	// cannot call SyntaxHighlighter::set_text_edit, and TextEdit::
+	// set_syntax_highlighter is the only thing that does; since it never unbinds
+	// the highlighter it replaces, the inner one stays attached once ours takes
+	// over. If that ever stops holding, the inner one just reports no colors.
+	code_edit->set_syntax_highlighter(highlighter->get_inner_highlighter());
 	code_edit->set_syntax_highlighter(highlighter);
 }
 
@@ -132,7 +138,8 @@ void PythonEditorPlugin::on_editor_settings_changed() {
 		}
 		PythonSyntaxHighlighter *highlighter = Object::cast_to<PythonSyntaxHighlighter>(code_edit->get_syntax_highlighter().ptr());
 		if (highlighter != nullptr) {
-			highlighter->rebuild();
+			// Drops the cached lines and runs rebuild() through _update_cache().
+			highlighter->update_cache();
 		}
 	}
 }

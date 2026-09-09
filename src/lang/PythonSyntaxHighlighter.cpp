@@ -64,10 +64,39 @@ Color theme_color(const Ref<EditorSettings> &p_settings, const char *p_name, con
 
 } //namespace
 
+PythonSyntaxHighlighter::PythonSyntaxHighlighter() {
+	highlighter.instantiate();
+}
+
+String PythonSyntaxHighlighter::_get_name() const {
+	return "Python";
+}
+
+PackedStringArray PythonSyntaxHighlighter::_get_supported_languages() const {
+	PackedStringArray languages;
+	languages.push_back("Python");
+	return languages;
+}
+
+Dictionary PythonSyntaxHighlighter::_get_line_syntax_highlighting(int32_t p_line) const {
+	// Returns an empty map while the inner highlighter has no TextEdit, which
+	// costs us the colors on that editor but never crashes.
+	return highlighter->get_line_syntax_highlighting(p_line);
+}
+
+void PythonSyntaxHighlighter::_update_cache() {
+	// Called by the editor whenever the theme or the text changes.
+	rebuild();
+}
+
+void PythonSyntaxHighlighter::_clear_highlighting_cache() {
+	highlighter->clear_highlighting_cache();
+}
+
 void PythonSyntaxHighlighter::rebuild() {
-	clear_keyword_colors();
-	clear_member_keyword_colors();
-	clear_color_regions();
+	highlighter->clear_keyword_colors();
+	highlighter->clear_member_keyword_colors();
+	highlighter->clear_color_regions();
 
 	EditorInterface *editor = EditorInterface::get_singleton();
 	const Ref<EditorSettings> settings = editor != nullptr ? editor->get_editor_settings() : Ref<EditorSettings>();
@@ -89,17 +118,17 @@ void PythonSyntaxHighlighter::rebuild() {
 	const Color global_function_color = theme_color(settings, "gdscript/global_function_color", function_color);
 	const Color annotation_color = theme_color(settings, "gdscript/annotation_color", Color(1.0, 0.70, 0.70));
 
-	set_symbol_color(symbol_color);
-	set_function_color(function_color);
-	set_number_color(number_color);
-	set_member_variable_color(member_variable_color);
+	highlighter->set_symbol_color(symbol_color);
+	highlighter->set_function_color(function_color);
+	highlighter->set_number_color(number_color);
+	highlighter->set_member_variable_color(member_variable_color);
 
 	// Engine classes go in first: everything added below may legitimately
 	// shadow them, and the last color registered for a word wins.
 	const PackedStringArray engine_types = ClassDBSingleton::get_singleton()->get_class_list();
 	for (int i = 0; i < engine_types.size(); i++) {
 		const String name = engine_types[i];
-		add_keyword_color(name.begins_with("_") ? name.substr(1) : name, engine_type_color);
+		highlighter->add_keyword_color(name.begins_with("_") ? name.substr(1) : name, engine_type_color);
 	}
 
 	const TypedArray<Dictionary> global_classes = ProjectSettings::get_singleton()->get_global_class_list();
@@ -107,21 +136,21 @@ void PythonSyntaxHighlighter::rebuild() {
 		const Dictionary entry = global_classes[i];
 		const String name = entry.get("class", String());
 		if (!name.is_empty()) {
-			add_keyword_color(name, user_type_color);
+			highlighter->add_keyword_color(name, user_type_color);
 		}
 	}
 
 	for (const char **it = BUILTIN_TYPES; *it != nullptr; it++) {
-		add_keyword_color(*it, base_type_color);
+		highlighter->add_keyword_color(*it, base_type_color);
 	}
 	for (const char **it = BUILTIN_FUNCTIONS; *it != nullptr; it++) {
-		add_keyword_color(*it, global_function_color);
+		highlighter->add_keyword_color(*it, global_function_color);
 	}
 	for (const char **it = SCRIPT_HELPERS; *it != nullptr; it++) {
-		add_keyword_color(*it, annotation_color);
+		highlighter->add_keyword_color(*it, annotation_color);
 	}
 	for (const char **it = SOFT_NAMES; *it != nullptr; it++) {
-		add_keyword_color(*it, member_variable_color);
+		highlighter->add_keyword_color(*it, member_variable_color);
 	}
 
 	// Keywords last, so a real keyword always beats a shadowed builtin.
@@ -130,7 +159,7 @@ void PythonSyntaxHighlighter::rebuild() {
 		const PackedStringArray reserved_words = language->_get_reserved_words();
 		for (int i = 0; i < reserved_words.size(); i++) {
 			const String word = reserved_words[i];
-			add_keyword_color(word, language->_is_control_flow_keyword(word) ? control_flow_keyword_color : keyword_color);
+			highlighter->add_keyword_color(word, language->_is_control_flow_keyword(word) ? control_flow_keyword_color : keyword_color);
 		}
 
 		// Same "<begin> <end>" encoding the editor's standard highlighter uses;
@@ -142,7 +171,7 @@ void PythonSyntaxHighlighter::rebuild() {
 		add_color_regions(language->_get_comment_delimiters(), comment_color);
 	}
 
-	clear_highlighting_cache();
+	highlighter->clear_highlighting_cache();
 }
 
 void PythonSyntaxHighlighter::add_color_regions(const PackedStringArray &p_delimiters, const Color &p_color) {
@@ -150,11 +179,11 @@ void PythonSyntaxHighlighter::add_color_regions(const PackedStringArray &p_delim
 		const String delimiter = p_delimiters[i];
 		const String begin = delimiter.get_slice(" ", 0);
 		// CodeHighlighter aborts on an empty or duplicated start key.
-		if (begin.is_empty() || has_color_region(begin)) {
+		if (begin.is_empty() || highlighter->has_color_region(begin)) {
 			continue;
 		}
 		const String end = delimiter.get_slice_count(" ") > 1 ? delimiter.get_slice(" ", 1) : String();
-		add_color_region(begin, end, p_color, end.is_empty());
+		highlighter->add_color_region(begin, end, p_color, end.is_empty());
 	}
 }
 

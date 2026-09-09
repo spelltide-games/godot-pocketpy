@@ -1,5 +1,7 @@
 # godot-pocketpy
 
+https://store.godotengine.org/asset/spelltide-games/godot-pocketpy/
+
 Write your Godot 4 game logic in Python, powered by [pocketpy](https://github.com/pocketpy/pocketpy) — a portable Python 3.x interpreter written in C11.
 
 A Python script works like a GDScript one: attach it to a node, export properties to the Inspector, declare signals, and implement Godot's virtual callbacks.
