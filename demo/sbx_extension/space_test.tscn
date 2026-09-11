@@ -30,11 +30,11 @@ func _ready() -> void:
 	var s = '__import__(\"sbx\").playground.instance.space.get_ptr()'
 	p_space = PythonScript.eval(s)
 	print('p_space: %d' % p_space)
-	rebuild(p_space, true, 0, 0, 2, 2)
+	rebuild(p_space, true, 1, 1, 1)
 
 func _physics_process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
-		rebuild(p_space, false, 0, 0, 2, 2)
+		rebuild(p_space, false, 1, 1, 1)
 		#print('FPS: ', Engine.get_frames_per_second())
 "
 

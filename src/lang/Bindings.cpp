@@ -106,7 +106,7 @@ static bool call_next_for_coroutine(Object *owner, IdGenerator::T id) {
 		}
 		Signal signal = v;
 		signal.connect(Callable(memnew(CoroutineResumer(owner, id))),
-				Object::CONNECT_ONE_SHOT | Object::CONNECT_DEFERRED);
+				Object::CONNECT_ONE_SHOT);
 		py_newint(py_retval(), id);
 		return true;
 	} else if (res == -1) {
@@ -550,21 +550,21 @@ void setup_python_bindings() {
 // `__swap` reverses the operand order. Godot evaluates `a <op> b`, which matches
 // Python for every operator below except `__contains__`: that one arrives as
 // `container.__contains__(item)` while OP_IN evaluates `item in container`.
-#define DEF_BINARY_OP(__name, __op, __swap)                            \
-	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool {    \
-		PY_CHECK_ARGC(2);                                              \
-		Variant self = to_variant_exact(&argv[0]);                     \
-		Variant other = py_tovariant(&argv[1]);                        \
-		Variant r_ret;                                                 \
-		bool r_valid;                                                  \
-		const Variant &a = __swap ? other : self;                      \
-		const Variant &b = __swap ? self : other;                      \
-		Variant::evaluate(Variant::__op, a, b, r_ret, r_valid);        \
-		if (r_valid) {                                                 \
-			py_newvariant(py_retval(), &r_ret);                        \
-			return true;                                               \
-		}                                                              \
-		return RuntimeError("!r_valid");                               \
+#define DEF_BINARY_OP(__name, __op, __swap)                         \
+	py_bindmethod(type, __name, [](int argc, py_Ref argv) -> bool { \
+		PY_CHECK_ARGC(2);                                           \
+		Variant self = to_variant_exact(&argv[0]);                  \
+		Variant other = py_tovariant(&argv[1]);                     \
+		Variant r_ret;                                              \
+		bool r_valid;                                               \
+		const Variant &a = __swap ? other : self;                   \
+		const Variant &b = __swap ? self : other;                   \
+		Variant::evaluate(Variant::__op, a, b, r_ret, r_valid);     \
+		if (r_valid) {                                              \
+			py_newvariant(py_retval(), &r_ret);                     \
+			return true;                                            \
+		}                                                           \
+		return RuntimeError("!r_valid");                            \
 	});
 
 	DEF_BINARY_OP("__eq__", OP_EQUAL, false)
