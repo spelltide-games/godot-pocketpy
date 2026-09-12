@@ -65,15 +65,6 @@ add_library(${LIBNAME} SHARED)
 file(GLOB_RECURSE LANG_SRC ${CMAKE_CURRENT_LIST_DIR}/src/lang/*.cpp)
 file(GLOB_RECURSE SUPPORT_SRC ${CMAKE_CURRENT_LIST_DIR}/src/support/*.cpp)
 
-target_sources(${LIBNAME}
-    PRIVATE
-    src/register_types.cpp
-    src/register_types.h
-    src/extensions.hpp
-    ${LANG_SRC}
-    ${SUPPORT_SRC}
-)
-
 if(NOT MSVC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffp-contract=off")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
@@ -83,6 +74,15 @@ else()
     add_compile_options(/wd4305)
     add_compile_options(/wd4996)
 endif()
+
+target_sources(${LIBNAME}
+    PRIVATE
+    src/register_types.cpp
+    src/register_types.h
+    src/extensions.hpp
+    ${LANG_SRC}
+    ${SUPPORT_SRC}
+)
 
 target_link_libraries(${LIBNAME} PRIVATE
     godot-cpp

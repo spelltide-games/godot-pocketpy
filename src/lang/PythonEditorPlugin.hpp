@@ -4,6 +4,9 @@
 #include <godot_cpp/classes/editor_plugin.hpp>
 #include <godot_cpp/classes/script.hpp>
 
+#include "PythonModuleExportPlugin.hpp"
+#include "PythonModulesDock.hpp"
+
 using namespace godot;
 
 namespace pkpy {
@@ -20,6 +23,9 @@ public:
 	void _set_window_layout(const Ref<ConfigFile> &p_configuration) override;
 
 private:
+	PythonModulesDock *modules_dock = nullptr;
+	Ref<PythonModuleExportPlugin> module_export;
+
 	void rebuild_index_file();
 
 	// Gives the script currently shown in the script editor a Python

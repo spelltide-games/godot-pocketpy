@@ -229,39 +229,49 @@ Variant to_variant_exact(py_Ref val) {
 	}
 }
 
-Variant py_tovariant(py_Ref val) {
+bool py_tovariant_checked(py_Ref val, Variant *r_out) {
 	switch (py_typeof(val)) {
 		case tp_NoneType:
-			return Variant();
+			*r_out = Variant();
+			return true;
 		case tp_bool:
-			return py_tobool(val);
+			*r_out = py_tobool(val);
+			return true;
 		case tp_int:
-			return py_toint(val);
+			*r_out = py_toint(val);
+			return true;
 		case tp_float:
-			return py_tofloat(val);
+			*r_out = py_tofloat(val);
+			return true;
 		case tp_str: {
 			c11_sv sv = py_tosv(val);
-			return String::utf8(sv.data, sv.size);
+			*r_out = String::utf8(sv.data, sv.size);
+			return true;
 		}
 		case tp_vec2: {
 			c11_vec2 v = py_tovec2(val);
-			return Vector2(v.x, v.y);
+			*r_out = Vector2(v.x, v.y);
+			return true;
 		}
 		case tp_vec2i: {
 			c11_vec2i v = py_tovec2i(val);
-			return Vector2i(v.x, v.y);
+			*r_out = Vector2i(v.x, v.y);
+			return true;
 		}
 		case tp_vec3: {
 			c11_vec3 v = py_tovec3(val);
-			return Vector3(v.x, v.y, v.z);
+			*r_out = Vector3(v.x, v.y, v.z);
+			return true;
 		}
 		case tp_vec3i: {
 			c11_vec3i v = py_tovec3i(val);
-			return Vector3i(v.x, v.y, v.z);
+			*r_out = Vector3i(v.x, v.y, v.z);
+			return true;
 		}
 		case tp_vec4i: {
 			c11_vec4i v = py_tovec4i(val);
-			return Vector4i(v.x, v.y, v.z, v.w);
+			*r_out = Vector4i(v.x, v.y, v.z, v.w);
+			return true;
 		}
 		case tp_color32: {
 			c11_color32 c = py_tocolor32(val);
@@ -269,12 +279,29 @@ Variant py_tovariant(py_Ref val) {
 			float g = c.g / 255.0f;
 			float b = c.b / 255.0f;
 			float a = c.a / 255.0f;
-			return Color(r, g, b, a);
+			*r_out = Color(r, g, b, a);
+			return true;
 		}
-		default: {
-			return to_variant_exact(val);
-		}
+		default:
+			break;
 	}
+	if (!py_istype(val, pyctx()->tp_Variant)) {
+		return false;
+	}
+	// A Variant box with an `extra` nobody recognizes is a different failure --
+	// corruption, not a missing counterpart -- so let to_variant_exact() report
+	// it rather than swallowing it as "no counterpart".
+	*r_out = to_variant_exact(val);
+	return true;
+}
+
+Variant py_tovariant(py_Ref val) {
+	Variant out;
+	if (!py_tovariant_checked(val, &out)) {
+		ERR_PRINT(String("py_tovariant: no Variant counterpart for type '") + py_tpname(py_typeof(val)) + "'");
+		return Variant();
+	}
+	return out;
 }
 
 void py_newstring(py_OutRef out, String val) {

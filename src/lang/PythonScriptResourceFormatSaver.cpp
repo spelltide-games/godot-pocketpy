@@ -15,6 +15,8 @@ static Ref<PythonScriptResourceFormatSaver> py_saver;
 Error PythonScriptResourceFormatSaver::_save(const Ref<Resource> &resource, const String &p_path, uint32_t flags) {
 	Ref<PythonScript> py_script = resource;
 	ERR_FAIL_COND_V(py_script.is_null(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V_MSG(is_python_module_path(p_path), ERR_INVALID_PARAMETER,
+			"site-packages contains importable Python modules, not attachable scripts.");
 
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::ModeFlags::WRITE);
 	ERR_FAIL_COND_V_MSG(file.is_null(), FileAccess::get_open_error(), "Failed to save file at " + p_path);

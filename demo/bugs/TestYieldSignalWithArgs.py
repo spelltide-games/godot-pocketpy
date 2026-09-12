@@ -1,5 +1,6 @@
 from godot import *
 from godot.classes import Node2D
+from godot.constants import KEY_SPACE
 
 class TestYieldSignalWithArgs(Extends(Node2D)):
     signal_with_args = signal('x', 'y')

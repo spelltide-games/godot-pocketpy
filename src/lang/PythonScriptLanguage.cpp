@@ -10,6 +10,7 @@
 #include <godot_cpp/variant/packed_string_array.hpp>
 
 #include "Bindings.hpp"
+#include "PythonDebugger.hpp"
 #include "PythonScript.hpp"
 
 #include "pocketpy.h"
@@ -133,6 +134,9 @@ Dictionary PythonScriptLanguage::_validate(const String &script, const String &p
 }
 
 String PythonScriptLanguage::_validate_path(const String &path) const {
+	if (is_python_module_path(path)) {
+		return "site-packages contains importable Python modules. Choose another folder for an attachable script.";
+	}
 	String class_name = path.get_file().get_basename();
 	return "";
 }
@@ -211,48 +215,59 @@ void PythonScriptLanguage::_thread_enter() {
 void PythonScriptLanguage::_thread_exit() {
 }
 
+// The engine reaches the debugger through these, from inside the blocking loop
+// in RemoteDebugger::debug(). PythonDebugger owns all of the state; see the
+// comment at the top of PythonDebugger.hpp for the flow.
+
 String PythonScriptLanguage::_debug_get_error() const {
-	return {};
+	return PythonDebugger::get_error();
 }
 
 int32_t PythonScriptLanguage::_debug_get_stack_level_count() const {
-	return {};
+	return PythonDebugger::get_stack_level_count();
 }
 
 int32_t PythonScriptLanguage::_debug_get_stack_level_line(int32_t p_level) const {
-	return {};
+	return PythonDebugger::get_stack_level_line(p_level);
 }
 
 String PythonScriptLanguage::_debug_get_stack_level_function(int32_t p_level) const {
-	return {};
+	return PythonDebugger::get_stack_level_function(p_level);
 }
 
 String PythonScriptLanguage::_debug_get_stack_level_source(int32_t p_level) const {
-	return {};
+	return PythonDebugger::get_stack_level_source(p_level);
 }
 
 Dictionary PythonScriptLanguage::_debug_get_stack_level_locals(int32_t p_level, int32_t p_max_subitems, int32_t p_max_depth) {
-	return {};
+	// p_max_depth is for recursive expansion, which the editor does itself from
+	// the Variants handed back here.
+	return PythonDebugger::get_stack_level_locals(p_level, p_max_subitems);
 }
 
 Dictionary PythonScriptLanguage::_debug_get_stack_level_members(int32_t p_level, int32_t p_max_subitems, int32_t p_max_depth) {
-	return {};
+	return PythonDebugger::get_stack_level_members(p_level, p_max_subitems);
 }
 
 void *PythonScriptLanguage::_debug_get_stack_level_instance(int32_t p_level) {
-	return {};
+	return PythonDebugger::get_stack_level_instance(p_level);
 }
 
 Dictionary PythonScriptLanguage::_debug_get_globals(int32_t p_max_subitems, int32_t p_max_depth) {
-	return {};
+	return PythonDebugger::get_globals(p_max_subitems);
 }
 
 String PythonScriptLanguage::_debug_parse_stack_level_expression(int32_t p_level, const String &p_expression, int32_t p_max_subitems, int32_t p_max_depth) {
+	// Intentionally empty: nothing in Godot 4 calls this. Watch expressions go
+	// through RemoteDebugger's `evaluate` command, which runs them through
+	// Godot's own Expression class against the frame's locals -- so watches are
+	// Godot expressions, not Python ones. Real Python eval needs a side channel
+	// (EngineDebugger::register_message_capture), which is separate work.
 	return {};
 }
 
 TypedArray<Dictionary> PythonScriptLanguage::_debug_get_current_stack_info() {
-	return {};
+	return PythonDebugger::get_current_stack_info();
 }
 
 void PythonScriptLanguage::_reload_all_scripts() {
@@ -302,6 +317,9 @@ int32_t PythonScriptLanguage::_profiling_get_frame_data(ScriptLanguageExtensionP
 
 void PythonScriptLanguage::_frame() {
 	reload_pump.drain();
+	// Bounds how stale the debugger's breakpoint memo can get; see
+	// PythonDebugger::flush_breakpoint_cache().
+	PythonDebugger::flush_breakpoint_cache();
 }
 
 bool PythonScriptLanguage::_handles_global_class_type(const String &type) const {
@@ -309,6 +327,9 @@ bool PythonScriptLanguage::_handles_global_class_type(const String &type) const 
 }
 
 Dictionary PythonScriptLanguage::_get_global_class_name(const String &path) const {
+	if (is_python_module_path(path)) {
+		return {};
+	}
 	String filename = path.get_file();
 	if (!filename.ends_with(".py")) {
 		return {};

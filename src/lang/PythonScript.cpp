@@ -108,7 +108,8 @@ void *PythonScript::_instance_create(Object *for_object) const {
 			return NULL;
 		}
 	}
-	return internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), ud);
+	ud->engine_instance = internal::gdextension_interface_script_instance_create3(PythonScriptInstance::get_script_instance_info(), ud);
+	return ud->engine_instance;
 }
 
 void *PythonScript::_placeholder_instance_create(Object *for_object) const {
@@ -144,6 +145,8 @@ uint64_t PythonScript::current_fingerprint() const {
 }
 
 Error PythonScript::_reload(bool keep_state) {
+	ERR_FAIL_COND_V_MSG(is_python_module_path(get_path()), ERR_FILE_UNRECOGNIZED,
+			"site-packages contains importable Python modules, not attachable scripts.");
 	// Ignored, and not passed on: py_exec() runs in RELOAD_MODE, which re-execs the
 	// module without allocating new types, so live instances survive either way.
 	// There is no "discard state" variant to select.

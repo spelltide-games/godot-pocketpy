@@ -8,6 +8,7 @@
 #include <godot_cpp/variant/typed_array.hpp>
 
 #include "PythonScript.hpp"
+#include "PythonModuleSource.hpp"
 #include "PythonSyntaxHighlighter.hpp"
 
 namespace pkpy {
@@ -43,6 +44,11 @@ void PythonEditorPlugin::_bind_methods() {
 }
 
 void PythonEditorPlugin::_enter_tree() {
+	modules_dock = memnew(PythonModulesDock);
+	add_control_to_dock(DOCK_SLOT_LEFT_BR, modules_dock);
+	module_export.instantiate();
+	add_export_plugin(module_export);
+
 	add_tool_menu_item(TOOL_ITEM_NAME, Callable(this, "rebuild_index_file"));
 
 	ScriptEditor *script_editor = get_script_editor();
@@ -58,6 +64,15 @@ void PythonEditorPlugin::_enter_tree() {
 }
 
 void PythonEditorPlugin::_exit_tree() {
+	if (modules_dock != nullptr) {
+		remove_control_from_docks(modules_dock);
+		modules_dock->queue_free();
+		modules_dock = nullptr;
+	}
+	if (module_export.is_valid()) {
+		remove_export_plugin(module_export);
+		module_export.unref();
+	}
 	remove_tool_menu_item(TOOL_ITEM_NAME);
 
 	ScriptEditor *script_editor = get_script_editor();
@@ -97,7 +112,8 @@ void PythonEditorPlugin::install_syntax_highlighter() {
 		return;
 	}
 	const Ref<Script> script = script_editor->get_current_script();
-	if (Object::cast_to<PythonScript>(script.ptr()) == nullptr) {
+	if (Object::cast_to<PythonScript>(script.ptr()) == nullptr &&
+			Object::cast_to<PythonModuleSource>(script.ptr()) == nullptr) {
 		return;
 	}
 	CodeEdit *code_edit = get_code_edit(script_editor->get_current_editor());

@@ -11,7 +11,7 @@ class PythonScriptResourceFormatLoader : public ResourceFormatLoader {
 
 public:
 	PackedStringArray _get_recognized_extensions() const override;
-	// bool _recognize_path(const String &p_path, const StringName &p_type) const override;
+	bool _recognize_path(const String &p_path, const StringName &p_type) const override;
 	bool _handles_type(const StringName &p_type) const override;
 	String _get_resource_type(const String &p_path) const override;
 	// String _get_resource_script_class(const String &p_path) const override;

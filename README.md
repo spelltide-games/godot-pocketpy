@@ -49,6 +49,14 @@ There are **two kinds of Python files**, and the difference matters:
 
 `import` statements are resolved against `res://site-packages/` only, so every shared module must live there. That folder **must** contain an empty `.gdignore` file, otherwise Godot will try to compile each module as a script and report errors.
 
+The `.gdignore` does not prevent editing or debugging. When the addon is active,
+the editor has a **Python** dock next to the FileSystem dock. It reads
+the ignored directory directly, so you can expand packages, double-click a
+`.py` file, and set breakpoints before the module is imported. These files are
+opened through an editor-only source document: they are never executed by the
+editor and cannot be attached to a node. The dock's **Refresh** button picks up
+files added while the editor is running.
+
 A typical project looks like this:
 
 ```
@@ -255,6 +263,9 @@ To keep your IDE aware of these classes, run **Project → Tools → "Python: Re
 #### Loading resources and using singletons
 
 ```python
+from godot import *
+from godot.constants import KEY_SPACE
+
 scene = load('res://scenes/Enemy.tscn')
 enemy = scene.instantiate()
 
@@ -263,7 +274,15 @@ if Input.is_key_pressed(KEY_SPACE):
     ...
 ```
 
-`from godot import *` brings in the engine singletons (`Input`, `OS`, `Engine`, `Time`, `ProjectSettings`, …), the built-in Variant types, and the global constants (`KEY_*`, `TYPE_*`, `PROPERTY_HINT_*`, …).
+`from godot import *` brings in the engine singletons (`Input`, `OS`, `Engine`, `Time`, `ProjectSettings`, …), the built-in Variant types and the scripting helpers.
+
+Global constants (`KEY_*`, `TYPE_*`, `PROPERTY_HINT_*`, `OK`, …) live in `godot.constants` and are not exported by the root module. Import the names you use explicitly:
+
+```python
+from godot.constants import KEY_SPACE, TYPE_BOOL
+```
+
+Existing `godot.KEY_SPACE` and `from godot import KEY_SPACE` usages must migrate to explicit imports such as `from godot.constants import KEY_SPACE`. Class constants such as `Vector2.ZERO` and `Node.PROCESS_MODE_ALWAYS` keep their existing paths.
 
 ### 5. Autocompletion and type checking
 
@@ -281,18 +300,19 @@ The addon ships `.pyi` stubs for the whole Godot API. To let Pylance / Pyright u
 }
 ```
 
-- `stubPath` enables completion for `godot`, `godot.classes` and the pocketpy modules.
+- `stubPath` enables completion for `godot`, `godot.constants`, `godot.classes` and the pocketpy modules.
 - `extraPaths` makes your own `site-packages` modules resolve the same way they do at runtime.
 
 ### 6. Exporting your game
 
-Exporting works as usual — the artifact already contains release libraries for all supported platforms.
+Exporting works as usual — the artifact already contains release libraries for all supported platforms. The addon automatically adds every
+`site-packages/**/*.py` file to the export even though the directory is
+`.gdignore`d, so imports continue to work from a PCK. `.gdignore`, `__pycache__`,
+`.pyc` and `.pyo` files are left out. Other non-Python files in
+`site-packages` are not exported automatically.
 
-One thing to check: because `site-packages` carries a `.gdignore`, its `.py` files are not Godot resources. If your exported build raises import errors that never happen in the editor, add a filter under *Project → Export → Resources → "Filters to export non-resource files/folders"*, for example:
-
-```
-site-packages/*
-```
+The export plugin also respects the preset's `exclude_filter`, so generated or
+development-only files can be excluded there.
 
 ### 7. Troubleshooting
 
@@ -306,6 +326,8 @@ site-packages/*
 | `cannot export 'X': expected a Resource or Node subclass` / `... node exports require a Node-derived script` | Only built-in Variant types, `Resource` subclasses and `Node` subclasses are exportable, and a node export needs a `Node`-derived script. |
 | `cannot open file 'res://site-packages/foo.py' when importing 'foo' module` | The module is missing from `res://site-packages/`, or you tried to import a script that lives elsewhere. |
 | Errors about your library modules on editor startup | `res://site-packages/.gdignore` is missing, so Godot is compiling them as scripts. |
+| `site-packages` is not visible in FileSystem | This is intentional. Open the **Python** dock beside FileSystem and click **Refresh** if files were added after startup. |
+| A module cannot be attached to a node | Modules are import-only. Put attachable Python scripts outside `site-packages/`. |
 | Exported properties are `None` in `__init__` | Expected — the Inspector values are applied after construction. Read them in `_ready()`. |
 | `coroutine yielded value must be 'godot.Signal'` | A coroutine yielded something else. Yield a signal, or use `yield from` for another coroutine. |
 
@@ -335,3 +357,9 @@ Android builds need `ANDROID_NDK_HOME` to be set. The resulting library is writt
 To test the debug build, you need to open `demo/addons/godot-pocketpy/godot-pocketpy.gdextension`,
 find your platform and replace `template_release` with `template_debug`.
 In this way, the Godot Editor can load the debug version of the extension.
+
+The ignored-module editor, runtime and export integration checks can be run with:
+
+```
+python tests/module_sources/run.py --godot /path/to/godot
+```

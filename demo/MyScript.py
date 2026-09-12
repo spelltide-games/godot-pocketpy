@@ -1,5 +1,6 @@
 from godot import *
 from godot.classes import Node, TileSet, Vector2, Vector3, Color, PhysicsRayQueryParameters3D
+from godot.constants import TYPE_BOOL, KEY_SPACE
 
 import test
 

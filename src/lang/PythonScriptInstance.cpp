@@ -9,7 +9,7 @@
 namespace pkpy {
 
 PythonScriptInstance::PythonScriptInstance(Object *owner, Ref<PythonScript> script) :
-		owner(owner), owner_id(owner->get_instance_id()), script(script) {
+		owner(owner), owner_id(owner->get_instance_id()), script(script), engine_instance(nullptr) {
 	known_instances.insert(owner_id, this);
 }
 
@@ -36,6 +36,8 @@ void PythonScriptInstance::detach_from_owner() {
 	// Pending coroutines are resumed through the owner's signals, so they can
 	// never make progress again. Hand the generators back to the GC.
 	coroutines.clear();
+	// clear engine_instance
+	engine_instance = nullptr;
 }
 
 GDExtensionBool set_func(PythonScriptInstance *p_instance, const StringName *p_name, const Variant *p_value) {
@@ -79,8 +81,14 @@ GDExtensionBool property_get_revert_func(PythonScriptInstance *p_instance, const
 	return false;
 }
 
-Object *get_owner_func(PythonScriptInstance *p_instance) {
-	return p_instance->owner;
+void *get_owner_func(PythonScriptInstance *p_instance) {
+	// The engine wants its own Object*, not the godot-cpp wrapper -- same as
+	// get_script_func and get_language_func below. Handing over the wrapper made
+	// the engine read a bogus object: get_validated_object() came back null, so
+	// ScriptInstanceExtension::get_owner() looked like a dead instance. Nothing
+	// noticed until the debugger started calling it (the `self` row of a break,
+	// and RemoteDebugger's `evaluate`).
+	return p_instance->owner != nullptr ? p_instance->owner->_owner : nullptr;
 }
 
 void get_property_state_func(PythonScriptInstance *p_instance, GDExtensionScriptInstancePropertyStateAdd p_add_func, void *p_userdata) {

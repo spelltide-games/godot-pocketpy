@@ -317,7 +317,7 @@ void register_ClassConstant(const char *class_name, const char* name, Variant va
 void register_GlobalConstant(const char *name, py_i64 value) {
 	py_TValue tmp;
 	py_newint(&tmp, value);
-	py_setdict(pyctx()->godot, py_name(name), &tmp);
+	py_setdict(pyctx()->godot_constants, py_name(name), &tmp);
 }
 
 } // namespace pkpy

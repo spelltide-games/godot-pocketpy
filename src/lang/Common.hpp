@@ -1,5 +1,7 @@
 #pragma once
 
+#include "PythonSourcePath.hpp"
+
 #include "gdextension_interface.h"
 #include "godot_cpp/core/property_info.hpp"
 #include "godot_cpp/variant/callable.hpp"
@@ -113,6 +115,7 @@ struct PythonContext {
 	py_GlobalRef godot;
 	py_GlobalRef godot_classes;
 	py_GlobalRef godot_scripts;
+	py_GlobalRef godot_constants;
 	py_Type tp_Script;
 	py_Type tp_GDNativeClass;
 	py_Type tp_Variant;
@@ -177,6 +180,11 @@ struct SignalStatement : DefineStatement {
 
 ///////////////////
 
+// Where `import` resolves module files. Shared because the debugger has to
+// reverse the mapping: pocketpy names an imported module's frames by the
+// relative path it built ("test.py"), not by a res:// path, so turning one back
+// into something Godot can key a breakpoint on means re-applying this prefix.
+
 PythonContext *pyctx();
 
 inline py_Name godot_name_to_python(StringName name) {
@@ -194,7 +202,17 @@ void log_python_error_and_clearexc(py_StackRef p0);
 void py_newvariant(py_OutRef out, const Variant *val);
 void py_newstring(py_OutRef out, String val);
 
+// The single place that knows which Python types have a Variant counterpart.
+// Returns false -- quietly -- for everything else, which is most of what a
+// Python frame holds, so callers that expect misses (the debugger's variable
+// views) can handle them without filling the output log.
+bool py_tovariant_checked(py_Ref val, Variant *r_out);
+
+// The same conversion for callers where a miss is a bug: reports it and yields
+// a nil Variant.
 Variant py_tovariant(py_Ref val);
+
+// Unwraps a value already known to be a Variant box. Reports anything else.
 Variant to_variant_exact(py_Ref val);
 void dispose_contexts();
 

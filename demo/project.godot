@@ -32,6 +32,10 @@ window/size/viewport_height=900
 
 enabled=PackedStringArray("res://addons/immediate_gizmos/plugin.cfg")
 
+[python]
+
+debugger/enabled=true
+
 [rendering]
 
 renderer/rendering_method="mobile"

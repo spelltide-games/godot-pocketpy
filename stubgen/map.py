@@ -120,6 +120,15 @@ def fill_converters(gdt_all_in_one: GodotInOne):
     for clazz in gdt_all_in_one.singletons:
         converters.SINGLETON_CLASS_NAMES.add(clazz.name)
 
+def iter_global_constants(gdt_all_in_one: GodotInOne):
+    """Share the global constant names and values between bindings and stubs."""
+    for constant in gdt_all_in_one.global_constants:
+        yield constant.name, constant.value
+    for enum in gdt_all_in_one.global_enums:
+        for value in enum.values:
+            yield value.name, value.value
+
+
 def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
     global_variant_classes = []
 
@@ -177,9 +186,8 @@ def gen_c_writer(gdt_all_in_one: GodotInOne, c_writer: Writer) -> list[str]:
             const_name = converters.convert_keyword_name(c.name)
             c_writer.write(f'register_ClassConstant("{clazz.name}", "{const_name}", {c.value});')
 
-    for enum in gdt_all_in_one.global_enums:
-        for v in enum.values:
-            c_writer.write(f'register_GlobalConstant("{v.name}", {v.value});')
+    for name, value in iter_global_constants(gdt_all_in_one):
+        c_writer.write(f'register_GlobalConstant("{name}", {value});')
 
     c_writer.dedent()
     c_writer.write("}")
@@ -587,7 +595,12 @@ def bytes_to_var(b: PackedByteArray) -> Variant: ...
         writer.writefmt('from .variants import {0} as {0}', clazz)
     writer.write('')
 
-    enum.gen_global_enums(pyi_writer, gdt_all_in_one.global_enums, with_types=False, with_values=True)
+    return pyi_writer
+
+
+def gen_constants_pyi_writer(gdt_all_in_one: GodotInOne, pyi_writer: Writer) -> Writer:
+    for name, value in iter_global_constants(gdt_all_in_one):
+        pyi_writer.write(f'{name} = {value}')
     return pyi_writer
 
 
@@ -607,6 +620,7 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     map_result = MapResult(c_writer=Writer(), pyi_writers={
         '__init__.pyi': Writer(),
         'alias.pyi': Writer(),
+        'constants.pyi': Writer(),
         'enums.pyi': Writer(),
     })
 
@@ -620,6 +634,8 @@ def map_gdt_to_py(gdt_all_in_one: GodotInOne) -> MapResult:
     gen_alias_pyi_writer(gdt_all_in_one, map_result.pyi_writers['alias.pyi'])
     print('gen_enums_pyi_writer')
     gen_enums_pyi_writer(gdt_all_in_one, map_result.pyi_writers['enums.pyi'])
+    print('gen_constants_pyi_writer')
+    gen_constants_pyi_writer(gdt_all_in_one, map_result.pyi_writers['constants.pyi'])
     print('gen_init_pyi_writer')
     gen_init_pyi_writer(gdt_all_in_one, map_result.pyi_writers['__init__.pyi'], global_variant_classes)
 

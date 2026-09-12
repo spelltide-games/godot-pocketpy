@@ -347,8 +347,11 @@ void setup_python_bindings() {
 		// No-op, Godot's print is already flushed.
 	};
 	py_callbacks()->importfile = [](const char *path_cstr, int *size) -> char * {
-		String path = String::utf8(path_cstr);
-		path = "res://site-packages/" + path;
+		String path = resolve_python_module_path(String::utf8(path_cstr));
+		if (path.is_empty()) {
+			ERR_PRINT("Python import path escapes res://site-packages/: " + String::utf8(path_cstr));
+			return nullptr;
+		}
 		bool exists = FileAccess::file_exists(path);
 		if (!exists) {
 			return nullptr;
@@ -370,6 +373,9 @@ void setup_python_bindings() {
 	py_GlobalRef godot = pyctx()->godot = py_newmodule("godot");
 	pyctx()->godot_classes = py_newmodule("godot.classes");
 	pyctx()->godot_scripts = py_newmodule("godot.scripts");
+	// Keep global constants available through explicit godot.constants imports;
+	// do not attach this module to godot's root namespace.
+	pyctx()->godot_constants = py_newmodule("godot.constants");
 
 	py_bindfunc(py_getmodule("builtins"), "isinstance", godot_isinstance);
 

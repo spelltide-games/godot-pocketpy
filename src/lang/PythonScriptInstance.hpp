@@ -29,6 +29,13 @@ struct PythonScriptInstance {
 	uint64_t owner_id;
 	Ref<PythonScript> script;
 
+	// The engine-side ScriptInstanceExtension that wraps this object, as handed
+	// back by script_instance_create3(). Kept because the debugger has to return
+	// it from _debug_get_stack_level_instance(): RemoteDebugger abandons its
+	// whole debug loop -- silently resuming the game -- when a break reports no
+	// instance and the user types a watch expression.
+	void *engine_instance;
+
 	py_TValue py;
 
 	IdGenerator coroutine_id_gen;
