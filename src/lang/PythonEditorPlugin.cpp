@@ -61,6 +61,7 @@ void PythonEditorPlugin::_enter_tree() {
 	}
 
 	call_deferred("install_syntax_highlighter");
+	call_deferred("rebuild_index_file");
 }
 
 void PythonEditorPlugin::_exit_tree() {

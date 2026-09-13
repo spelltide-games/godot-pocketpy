@@ -7,6 +7,7 @@
 namespace pkpy {
 
 inline constexpr const char *SITE_PACKAGES_PREFIX = "res://site-packages/";
+inline constexpr const char *SCRIPTS_PREFIX = "res://scripts/";
 
 // Shared by the importer, source editor and debugger. A directory boundary is
 // intentional: site-packages-other is not a module root.
@@ -33,5 +34,7 @@ inline godot::String resolve_python_module_path(const godot::String &p_module) {
 // Explicit disk traversal: EditorFileSystem intentionally hides this tree.
 // Never follows directory links, so a package cannot introduce a scan cycle.
 godot::PackedStringArray list_python_package_files();
+
+godot::PackedStringArray list_python_script_files();
 
 } // namespace pkpy

@@ -33,4 +33,13 @@ godot::PackedStringArray list_python_package_files() {
 	return files;
 }
 
+godot::PackedStringArray list_python_script_files() {
+	godot::PackedStringArray files;
+	if (godot::DirAccess::dir_exists_absolute(SCRIPTS_PREFIX)) {
+		collect_files(SCRIPTS_PREFIX, files);
+		files.sort();
+	}
+	return files;
+}
+
 } // namespace pkpy

@@ -30,9 +30,6 @@ PythonScript::PythonScript() :
 PythonScript::~PythonScript() {
 	placeholders.erase(this);
 	runtime_type_to_script.erase(meta.type);
-	if (meta.is_valid && !meta.class_name.is_empty()) {
-		known_classes.erase(meta.class_name);
-	}
 }
 
 bool PythonScript::_editor_can_reload_from_file() {
@@ -266,7 +263,8 @@ Error PythonScript::reload_impl() {
 	struct DefineStatementWithOffset {
 		DefineStatement *d;
 		int offset;
-		DefineStatementWithOffset(): d(nullptr), offset(0) {}
+		DefineStatementWithOffset() :
+				d(nullptr), offset(0) {}
 		DefineStatementWithOffset(DefineStatement *d, int offset) :
 				d(d), offset(offset) {}
 		int index() const { return d->index + offset; }
@@ -374,7 +372,6 @@ Error PythonScript::reload_impl() {
 
 	placeholder_fallback_enabled = false;
 
-	known_classes[ctx->class_name] = get_path();
 	if (!Engine::get_singleton()->is_editor_hint()) {
 		py_setdict(pyctx()->godot_scripts, class_name, exposed_class);
 		runtime_type_to_script[exposed_type] = this;
@@ -571,20 +568,20 @@ void PythonScript::rebuild_index_file() {
 		return;
 	}
 	String index_path = "res://addons/godot-pocketpy/typings/godot/scripts.pyi";
-	print_line("=> Rebuilding Python script index file: " + index_path);
+	// print_line("=> Rebuilding Python script index file: " + index_path);
 	Ref<FileAccess> file = FileAccess::open(index_path, FileAccess::WRITE);
 	if (!file.is_valid() || !file->is_open()) {
 		ERR_PRINT("Failed to open index file for writing: " + index_path);
 		return;
 	}
-	for (const auto &it : known_classes) {
-		StringName class_name = it.key;
-		String path = it.value;
+	int count = 0;
+	for (const String &path : list_python_script_files()) {
 		if (!path.begins_with("res://") || !path.ends_with(".py")) {
-			WARN_PRINT("Cannot build index due to invalid script path: " + path);
 			continue;
 		}
-		print_line(String("+ ") + class_name + ": " + path);
+		StringName class_name = path.get_file().get_basename();
+		known_classes[class_name] = path;
+		// print_line(String("+ ") + class_name + ": " + path);
 		// res://scripts/quick_bar/QuickBarSlot.py
 		String stmt = path.replace("res://", "from ");
 		// from scripts/quick_bar/QuickBarSlot.py
@@ -593,8 +590,10 @@ void PythonScript::rebuild_index_file() {
 		stmt = stmt.replace("/", ".");
 		// from scripts.quick_bar.QuickBarSlot import QuickBarSlot as QuickBarSlot
 		file->store_line(stmt);
+		count++;
 	}
 	file->close();
+	print_line(String("=> Rebuilt ") + itos(count) + " scripts into " + index_path);
 }
 
 } //namespace pkpy
