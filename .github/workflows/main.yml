@@ -211,6 +211,11 @@ jobs:
           cat demo/addons/godot-pocketpy/GIT_COMMIT_HASH.txt
           cp LICENSE demo/addons/godot-pocketpy/LICENSE.txt
 
+      - name: "Remove SBX extension resources"
+        if: env.WITH_SBX != 'ON'
+        run: |
+          rm -rf demo/addons/godot-pocketpy/sbx_extension
+
       - name: "Stage artifact layout"
         run: |
           mkdir -p dist/addons
