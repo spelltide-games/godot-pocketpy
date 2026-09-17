@@ -5,24 +5,116 @@ script/source = "extends Node3D
 
 @export var speed = 2
 
+const PLAYGROUND = '__import__(\"sbx\").playground.instance'
+# How far back from the hero the camera sits. It is orthographic, so this only
+# keeps the map between its near and far planes.
+const CAMERA_DISTANCE = 20.0
+# The tile sizes to pick the camera's pitch by: the top of a cell, seen along the
+# 45 degree yaw, is as wide on screen as its diagonal and sin(pitch) times as
+# high, so a TILE_WIDTH x height tile takes the pitch asin(height / TILE_WIDTH).
+# The list of views ends with one more, looking north: yaw 0, pitch 45.
+const TILE_WIDTH = 32
+const TILE_HEIGHTS = [[16, '2:1'], [18, '16:9'], [20, '8:5'], [22, '16:11'], [24, '4:3'], [28, '8:7'], [32, '1:1']]
+const START_TILE_HEIGHT = 24 # the view the scene starts in, 32x24
+const GROUND_LAYERS = 2 # brick layer l stands at (l - GROUND_LAYERS) * brick height
+
+@onready var camera: Camera3D = $Camera3D
+@onready var highlight: MeshInstance3D = $Highlight
+
+var brick_height: float # the height of one brick layer
+var hero_extent: Vector3 # half the hero's size
+
 func _ready() -> void:
-	var s = '__import__(\"sbx\").playground.instance'
-	PythonScript.eval(s)
+	var info: Array = PythonScript.eval(PLAYGROUND + '.map_info()')
+	brick_height = info[3]
+	hero_extent = info[4]
+	# The marker is a sheet lying on the plane under the hero's feet, a little
+	# wider than a cell so that it covers the top of the brick below it.
+	var sheet := PlaneMesh.new()
+	sheet.size = Vector2(1.04, 1.04)
+	highlight.mesh = sheet
+	for tile in TILE_HEIGHTS:
+		%TileSize.add_item('%d×%d  %s  %.2f°' % [TILE_WIDTH, tile[0], tile[1], pitch_of(tile[0])])
+	%TileSize.add_item('yaw 0°  pitch 45.00°')
+	%TileSize.item_selected.connect(set_view)
+	var start: int = TILE_HEIGHTS.map(func(tile): return tile[0]).find(START_TILE_HEIGHT)
+	%TileSize.select(start)
+	set_view(start)
+
+static func pitch_of(tile_height: int) -> float:
+	return rad_to_deg(asin(float(tile_height) / TILE_WIDTH))
+
+# Turns the camera to the view at `index` in the list: a tile size at the 45
+# degree yaw, or after them, yaw 0 and pitch 45.
+func set_view(index: int) -> void:
+	if index < TILE_HEIGHTS.size():
+		camera.rotation_degrees = Vector3(-pitch_of(TILE_HEIGHTS[index][0]), 45, 0)
+	else:
+		camera.rotation_degrees = Vector3(-45, 0, 0)
 
 func _physics_process(delta: float) -> void:
-	var h = Input.get_axis('ui_left', 'ui_right')
-	var v = Input.get_axis('ui_up', 'ui_down')
-	h *= speed
-	v *= speed
-	var s = '__import__(\"sbx\").playground.instance.move_hero_and_step({0}, {1}, {2})'
-	var new_pos = PythonScript.eval(s.format([h, v, delta]))
-	var cam = get_viewport().get_camera_3d()
-	cam.position = Vector3(new_pos.x, cam.position.y, new_pos.z)
+	# The arrows and WASD, by where they sit rather than what they print, move the
+	# hero along the screen, as spelltide's Game.py does: turned back by the
+	# camera's yaw, at 45 degrees right is +X-Z and up is -X-Z, at 0 right is +X
+	# and up is -Z. Held together they never add up to more than walking speed.
+	var arrows := Input.get_vector('ui_left', 'ui_right', 'ui_up', 'ui_down')
+	var wasd := Vector2(
+		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+	var move: Vector2 = (arrows + wasd).limit_length(1.0).rotated(-camera.rotation.y) * speed
+	# spelled as a Python literal; held down, the hero jumps again as it lands
+	var jump = 'True' if Input.is_key_pressed(KEY_SPACE) else 'False'
+	var s = PLAYGROUND + '.move_hero_and_step({0}, {1}, {2}, {3})'
+	var pos: Vector3 = PythonScript.eval(s.format([move.x, move.y, delta, jump]))
+	camera.position = pos + camera.basis.z * CAMERA_DISTANCE
+	%TileMeshes.set_hero(pos, hero_extent)
+	aim()
+	%Minimap.hero = pos
+
+func _unhandled_input(event: InputEvent) -> void:
+	var button := event as InputEventMouseButton
+	if button == null or not button.pressed:
+		return
+	var edit := ''
+	if button.button_index == MOUSE_BUTTON_LEFT:
+		edit = '.place()'
+	elif button.button_index == MOUSE_BUTTON_RIGHT:
+		edit = '.remove()'
+	if edit and PythonScript.eval(PLAYGROUND + edit):
+		%SpaceRenderer.rebuild_tiles()
+		aim()
+
+# Aims at the cell under the cursor on the minimap, at nothing under the other
+# panels or the open list of tile sizes, which take the clicks there, or
+# anywhere else where the ray through the cursor crosses the plane y = 0, and
+# shows where.
+func aim() -> void:
+	var mouse := get_viewport().get_mouse_position()
+	var s: String
+	if %Info.get_global_rect().has_point(mouse) or %View.get_global_rect().has_point(mouse) or %TileSize.get_popup().visible:
+		s = '.aim_clear()'
+	elif %Minimap.get_global_rect().has_point(mouse):
+		var cell: Vector2i = %Minimap.cell_at(mouse)
+		s = '.aim_cell({0}, {1})'.format([cell.x, cell.y]) if cell.x >= 0 else '.aim_clear()'
+	else:
+		var o := camera.project_ray_origin(mouse)
+		var d := camera.project_ray_normal(mouse)
+		s = '.aim_ray({0}, {1}, {2}, {3}, {4}, {5})'.format([o.x, o.y, o.z, d.x, d.y, d.z])
+	var aim = PythonScript.eval(PLAYGROUND + s) # a Vector3i of cell and plane layer, or null
+	highlight.visible = aim != null
+	if aim != null:
+		# Brick layer l stands at (l - GROUND_LAYERS) * brick_height, and the sheet
+		# lies on that plane, just clear of the brick top it covers.
+		highlight.position = Vector3(aim.x + 0.5, (aim.z - GROUND_LAYERS) * brick_height + 0.01, aim.y + 0.5)
+	%Minimap.aim = Vector2i(aim.x, aim.y) if aim != null else null
 "
 
 [sub_resource type="GDScript" id="GDScript_7ngx2"]
 script/source = "@tool
 extends SpaceDebugDraw
+
+# emitted once the tiles are drawn anew, for the tile meshes and the minimap
+signal tiles_rebuilt
 
 var p_space: int
 
@@ -30,12 +122,395 @@ func _ready() -> void:
 	var s = '__import__(\"sbx\").playground.instance.space.get_ptr()'
 	p_space = PythonScript.eval(s)
 	print('p_space: %d' % p_space)
+	rebuild_tiles()
+
+func rebuild_tiles() -> void:
 	rebuild(p_space, true, 1, 1, 1)
+	tiles_rebuilt.emit()
 
 func _physics_process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
 		rebuild(p_space, false, 1, 1, 1)
 		#print('FPS: ', Engine.get_frames_per_second())
+"
+
+[sub_resource type="GDScript" id="GDScript_t1les"]
+script/source = "extends Node3D
+
+# Lit boxes for the tiles, made from the boxes SpaceRenderer draws as wireframes
+# instead of reading the tilemap again: one MultiMesh per box size, which for
+# the playground's bricks is one per rule-tile key. Their shader dithers away,
+# each whole, the bricks above the ground that hide part of the diamond under
+# the hero's feet, the top of the cell it stands in, from the camera.
+
+# Shrinks each box on every side, which keeps neighboring tiles apart and the
+# debug wireframe on a tile's edges in view.
+const INSET = 0.02
+# the variants of wall-rule-tile-16.html, as sbx/playground.py numbers them
+const PILLAR = 0
+const WALL_SW = 1
+const WALL_SE = 2
+const WALL_L = 3
+const FULL = 4
+const COLORS = [
+	Color('#ad6698'), # PILLAR
+	Color('#d88a48'), # WALL_SW
+	Color('#4a8bc3'), # WALL_SE
+	Color('#5ba16a'), # WALL_L
+	Color('#8f98a1'), # FULL
+]
+
+@export var cutaway: Shader # the tiles' shader
+
+var instances := {} # [box extent, variant] -> its MultiMeshInstance3D
+
+# A brick fills the west half of its cell only toward a west neighbor, and the
+# north half only toward a north one, so the size of a single box gives its
+# variant. The L is the one made of two boxes, which count_parts() finds.
+static func variant_of(extent: Vector3) -> int:
+	var west := extent.x > 0.375
+	var north := extent.z > 0.375
+	if west:
+		return FULL if north else WALL_SW
+	return WALL_SE if north else PILLAR
+
+# The slot a box sits in: its cell, and the height that names its layer.
+static func slot_of(transforms: PackedFloat32Array, i: int) -> Vector3:
+	return Vector3(floorf(transforms[i + 3]), transforms[i + 7], floorf(transforms[i + 11]))
+
+# How many boxes each slot holds. A slot holding two of them holds an L, the
+# only variant of the rule tile made of two parts.
+static func count_parts(boxes: Array) -> Dictionary:
+	var parts := {}
+	for box in boxes:
+		var transforms: PackedFloat32Array = box[1]
+		for i in range(0, transforms.size(), 12):
+			var slot := slot_of(transforms, i)
+			parts[slot] = parts.get(slot, 0) + 1
+	return parts
+
+func _ready() -> void:
+	%SpaceRenderer.tiles_rebuilt.connect(refresh)
+	refresh()
+
+func refresh() -> void:
+	for instance in instances.values():
+		instance.visible = false
+	var boxes: Array = %SpaceRenderer.get_tile_boxes()
+	var parts := count_parts(boxes)
+	for box in boxes:
+		var extent: Vector3 = box[0]
+		var transforms: PackedFloat32Array = box[1]
+		# One box size can serve two variants, because an L is drawn as the parts
+		# it is made of, so the group is split by variant before it is uploaded.
+		var buffers := {}
+		for i in range(0, transforms.size(), 12):
+			var variant := WALL_L if parts[slot_of(transforms, i)] > 1 else variant_of(extent)
+			if not buffers.has(variant):
+				buffers[variant] = PackedFloat32Array()
+			buffers[variant].append_array(transforms.slice(i, i + 12))
+		for variant in buffers:
+			var buffer: PackedFloat32Array = buffers[variant]
+			var key := [extent, variant]
+			var instance: MultiMeshInstance3D = instances.get(key)
+			if instance == null:
+				instance = create_instance(extent, variant)
+				instances[key] = instance
+			instance.multimesh.instance_count = buffer.size() / 12
+			instance.multimesh.buffer = buffer
+			instance.visible = true
+
+# The middle of the hero's body and half its size, for the bricks that hide the
+# diamond under its feet to open up.
+func set_hero(middle: Vector3, extent: Vector3) -> void:
+	for instance in instances.values():
+		var material: ShaderMaterial = instance.multimesh.mesh.material
+		material.set_shader_parameter('hero', middle)
+		material.set_shader_parameter('hero_extent', extent)
+
+func create_instance(extent: Vector3, variant: int) -> MultiMeshInstance3D:
+	var material := ShaderMaterial.new()
+	material.shader = cutaway
+	material.set_shader_parameter('albedo', COLORS[variant])
+	var mesh := BoxMesh.new()
+	mesh.size = extent * 2 - Vector3.ONE * INSET * 2
+	material.set_shader_parameter('half_size', mesh.size * 0.5)
+	mesh.material = material
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	var instance := MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+	add_child(instance)
+	return instance
+"
+
+[sub_resource type="Shader" id="Shader_cutaway"]
+code = "shader_type spatial;
+// what a StandardMaterial3D uses: a shader naming neither gets Lambert and no specular
+render_mode diffuse_burley, specular_schlick_ggx;
+
+// The tiles, lit as a StandardMaterial3D of the same albedo, with all but one
+// pixel in each 2x2 cut out of every brick whose cell hides part of the diamond
+// under the hero's feet, the top of the cell it stands in, from the camera, so
+// that where it stands shows through: the simplest dithered cutaway. A brick is
+// cut whole or not at all, and the ground, layers 0 and 1, never.
+uniform vec4 albedo : source_color = vec4(1.0);
+uniform vec3 half_size; // of this material's bricks, as drawn
+uniform vec3 hero; // the middle of the hero's body
+uniform vec3 hero_extent; // half its size
+
+varying flat float cut; // 1 on a brick to cut, the same at all its vertices
+
+// Whether the ray t * d, t > 0, meets the box [lo, hi].
+bool ray_meets(vec3 d, vec3 lo, vec3 hi) {
+	float t0 = 0.0;
+	float t1 = 1e30;
+	for (int k = 0; k < 3; k++) {
+		if (abs(d[k]) < 1e-6) {
+			if (lo[k] > 0.0 || hi[k] < 0.0) {
+				return false;
+			}
+		} else {
+			float a = lo[k] / d[k];
+			float b = hi[k] / d[k];
+			t0 = max(t0, min(a, b));
+			t1 = min(t1, max(a, b));
+		}
+	}
+	return t0 < t1;
+}
+
+void vertex() {
+	// The diamond is the top of the cell under the hero's feet, at their height.
+	// A ray from the camera meets the brick before the diamond where a point p of
+	// the brick is q + t * d for a point q of the diamond and some t > 0, d
+	// pointing back toward the camera, the same for every ray of this orthographic
+	// camera. So the brick hides the diamond when the ray t * d meets the box of
+	// all p - q.
+	vec3 feet = hero - vec3(0.0, hero_extent.y, 0.0);
+	vec3 diamond = vec3(floor(feet.x) + 0.5, feet.y, floor(feet.z) + 0.5); // its middle
+	vec3 half_cell = vec3(0.5, 0.0, 0.5);
+	// The brick is judged by the whole cell it sits in, at its own height, so
+	// that the two boxes an L is drawn as are always cut together.
+	vec3 brick = MODEL_MATRIX[3].xyz; // the middle of this box
+	vec3 lo = vec3(floor(brick.x), brick.y - half_size.y, floor(brick.z));
+	vec3 hi = lo + vec3(1.0, 2.0 * half_size.y, 1.0);
+	vec3 d = INV_VIEW_MATRIX[2].xyz; // the camera's +Z
+	bool ground = brick.y < 0.0; // layers 0 and 1 lie below y = 0
+	cut = !ground && ray_meets(d, lo - diamond - half_cell, hi - diamond + half_cell) ? 1.0 : 0.0;
+}
+
+void fragment() {
+	ALBEDO = albedo.rgb;
+	// a cut brick keeps the pixels at even x and y, one in each 2x2
+	if (cut > 0.5 && ((int(FRAGCOORD.x) | int(FRAGCOORD.y)) & 1) != 0) {
+		discard;
+	}
+}
+"
+
+[sub_resource type="Shader" id="Shader_sheet"]
+code = "shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
+
+// A sheet of light lying on the plane under the hero's feet, over the aimed
+// cell: dim inside and bright along its four edges.
+uniform vec4 color : source_color = vec4(1.0, 0.85, 0.2, 0.5);
+
+void fragment() {
+	vec2 side = abs(UV - 0.5) * 2.0;
+	float edge = smoothstep(0.8, 1.0, max(side.x, side.y));
+	ALBEDO = color.rgb;
+	ALPHA = color.a * (0.35 + 1.65 * edge);
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sheet"]
+render_priority = 0
+shader = SubResource("Shader_sheet")
+shader_parameter/color = Color(1, 0.85, 0.2, 0.5)
+
+[sub_resource type="Environment" id="Environment_sun"]
+ambient_light_source = 2
+ambient_light_color = Color(0.45, 0.45, 0.5, 1)
+
+[sub_resource type="GDScript" id="GDScript_mnmap"]
+script/source = "extends Control
+
+# The top view of wall-rule-tile-16.html around the hero, north up: every brick
+# SpaceRenderer draws, seen from above in the color of its key and darker on the
+# lower layers, over a tint of the whole cell for the topmost brick of each
+# column. The whole map is drawn into a texture on each tile rebuild, and the
+# view scrolls it under the hero, across the torus seam. Hovering a cell aims at
+# its topmost brick.
+
+const CELL = 24 # pixels per cell
+const VIEW = 22 # cells across the view
+const MARGIN = 30 # around the view, for the compass
+const LEGEND = 34 # below it
+const FONT_SIZE = 17
+const INK = Color(0.85, 0.88, 0.9)
+const EDGE = Color(0.09, 0.11, 0.13, 0.6)
+const AIM = Color(1, 0.85, 0.2) # as the highlight in 3D
+const NAMES = ['PILLAR', 'WALL_SW', 'WALL_SE', 'WALL_L', 'FULL']
+
+@onready var colors: Array = %TileMeshes.COLORS
+
+var map_size: Vector2i
+var chunk_size: int
+var brick_height: float
+var hero_extent: Vector3
+var bricks := [[], [], [], []] # per brick layer: [footprint in cells, variant]
+var tops := PackedInt32Array() # per cell: layer * 8 + variant of its topmost brick, or -1
+var map := SubViewport.new() # the whole map, drawn once per tile rebuild
+var map_canvas := Control.new()
+var view := Control.new() # the map around the hero, the hero and the aimed cell
+
+var hero := Vector3():
+	set(value):
+		hero = value
+		view.queue_redraw()
+var aim = null: # the aimed cell, a Vector2i, or null
+	set(value):
+		aim = value
+		view.queue_redraw()
+
+func _ready() -> void:
+	var info: Array = PythonScript.eval('__import__(\"sbx\").playground.instance.map_info()')
+	map_size = Vector2i(info[0], info[1])
+	chunk_size = info[2]
+	brick_height = info[3]
+	hero_extent = info[4]
+	custom_minimum_size = Vector2(VIEW * CELL + MARGIN * 2, VIEW * CELL + MARGIN * 2 + LEGEND)
+	map.size = map_size * CELL
+	map.disable_3d = true
+	map_canvas.size = Vector2(map_size * CELL)
+	map_canvas.draw.connect(draw_map)
+	map.add_child(map_canvas)
+	add_child(map)
+	view.position = Vector2(MARGIN, MARGIN)
+	view.size = Vector2(VIEW * CELL, VIEW * CELL)
+	view.clip_contents = true
+	view.mouse_filter = MOUSE_FILTER_IGNORE
+	view.draw.connect(draw_view)
+	add_child(view)
+	%SpaceRenderer.tiles_rebuilt.connect(refresh)
+	refresh()
+
+# the center of `cell` in the view, at its mirror nearest the hero
+func cell_center(cell: Vector2i) -> Vector2:
+	var d := Vector2(cell) + Vector2(0.5, 0.5) - Vector2(hero.x, hero.z)
+	d = Vector2(wrapf(d.x, -map_size.x * 0.5, map_size.x * 0.5), wrapf(d.y, -map_size.y * 0.5, map_size.y * 0.5))
+	return view.size * 0.5 + d * CELL
+
+# the cell under `point` in the viewport, or (-1, -1)
+func cell_at(point: Vector2) -> Vector2i:
+	var local := point - view.global_position
+	if not Rect2(Vector2.ZERO, view.size).has_point(local):
+		return Vector2i(-1, -1)
+	var cell := Vector2i((Vector2(hero.x, hero.z) + (local - view.size * 0.5) / CELL).floor())
+	return Vector2i(posmod(cell.x, map_size.x), posmod(cell.y, map_size.y))
+
+# a brick's color on the map: its key's, darker on the lower layers
+func color_of(key: int, layer: int) -> Color:
+	var color: Color = colors[key]
+	return color.darkened(0.2 * (2 - layer)) if layer < 2 else color.lightened(0.25 * (layer - 2))
+
+func refresh() -> void:
+	for layer in bricks:
+		layer.clear()
+	tops.resize(map_size.x * map_size.y)
+	tops.fill(-1)
+	var tiles := %TileMeshes
+	var boxes: Array = %SpaceRenderer.get_tile_boxes()
+	var parts: Dictionary = tiles.count_parts(boxes)
+	for box in boxes:
+		var e: Vector3 = box[0]
+		var transforms: PackedFloat32Array = box[1]
+		for i in range(0, transforms.size(), 12):
+			# the center of one box as SpaceRenderer drew it, which may be a mirror
+			# of its slot across the torus seam
+			var c := Vector3(transforms[i + 3], transforms[i + 7], transforms[i + 11])
+			var layer := floori(c.y / brick_height) + 2
+			if layer < 0 or layer > 3:
+				continue
+			var variant: int = tiles.WALL_L if parts[tiles.slot_of(transforms, i)] > 1 else tiles.variant_of(e)
+			var cell := Vector2i(floori(c.x), floori(c.z))
+			var footprint := Rect2(c.x - e.x - cell.x, c.z - e.z - cell.y, e.x * 2, e.z * 2)
+			cell = Vector2i(posmod(cell.x, map_size.x), posmod(cell.y, map_size.y))
+			footprint.position += Vector2(cell)
+			bricks[layer].append([footprint, variant])
+			var index := cell.y * map_size.x + cell.x
+			if tops[index] < layer * 8:
+				tops[index] = layer * 8 + variant
+	map_canvas.queue_redraw()
+	map.render_target_update_mode = SubViewport.UPDATE_ONCE
+	view.queue_redraw()
+
+func draw_map() -> void:
+	map_canvas.draw_rect(Rect2(Vector2.ZERO, map_canvas.size), Color(0.16, 0.18, 0.2))
+	# bottom layer first, so every brick covers the ones below it
+	for layer in 4:
+		for index in tops.size():
+			if tops[index] >> 3 == layer:
+				var tint := color_of(tops[index] & 7, layer)
+				tint.a = 0.28
+				var cell := Vector2(index % map_size.x, index / map_size.x)
+				map_canvas.draw_rect(Rect2(cell * CELL, Vector2(CELL, CELL)), tint)
+		for brick in bricks[layer]:
+			var footprint: Rect2 = brick[0]
+			var rect := Rect2(footprint.position * CELL, footprint.size * CELL)
+			map_canvas.draw_rect(rect, color_of(brick[1], layer))
+			map_canvas.draw_rect(rect, EDGE, false, 1.0)
+	# chunk borders
+	var line := Color(1, 1, 1, 0.18)
+	for x in range(0, map_size.x, chunk_size):
+		map_canvas.draw_rect(Rect2(x * CELL, 0, 1, map_canvas.size.y), line)
+	for z in range(0, map_size.y, chunk_size):
+		map_canvas.draw_rect(Rect2(0, z * CELL, map_canvas.size.x, 1), line)
+
+func draw_view() -> void:
+	# The map, shifted so that the hero sits in the middle. Two copies a side
+	# cover the view wherever the torus seam falls in it.
+	var corner := Vector2(hero.x, hero.z) - Vector2(VIEW, VIEW) * 0.5
+	var shift := (-Vector2(fposmod(corner.x, map_size.x), fposmod(corner.y, map_size.y)) * CELL).round()
+	var texture := map.get_texture()
+	for j in 2:
+		for i in 2:
+			view.draw_texture(texture, shift + Vector2(i * map_size.x, j * map_size.y) * CELL)
+	if aim != null:
+		view.draw_rect(Rect2(cell_center(aim) - Vector2(CELL, CELL) * 0.5, Vector2(CELL, CELL)), AIM, false, 3.0)
+	# the hero's footprint, in the middle
+	var extent := Vector2(hero_extent.x, hero_extent.z) * CELL
+	var body := Rect2(view.size * 0.5 - extent, extent * 2)
+	view.draw_rect(body, Color(1, 1, 1, 0.9))
+	view.draw_rect(body, EDGE, false, 2.0)
+
+func _draw() -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.45))
+	var font := get_theme_default_font()
+	var middle := view.position + view.size * 0.5
+	draw_label(font, Vector2(middle.x, MARGIN * 0.5), 0, 'N  -Z')
+	draw_label(font, Vector2(middle.x, MARGIN * 1.5 + view.size.y), 0, 'S  +Z')
+	draw_label(font, Vector2(MARGIN * 0.5, middle.y), -PI / 2, 'W  -X')
+	draw_label(font, Vector2(MARGIN * 1.5 + view.size.x, middle.y), PI / 2, 'E  +X')
+	# legend, in the page's order
+	var x := float(MARGIN)
+	var y := MARGIN * 2 + view.size.y
+	var tiles := %TileMeshes
+	for variant in [tiles.FULL, tiles.WALL_SW, tiles.WALL_SE, tiles.WALL_L, tiles.PILLAR]:
+		draw_rect(Rect2(x, y + 2, FONT_SIZE - 1, FONT_SIZE - 1), color_of(variant, 2))
+		draw_string(font, Vector2(x + FONT_SIZE + 4, y + FONT_SIZE), NAMES[variant], HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, INK)
+		x += FONT_SIZE + 4 + font.get_string_size(NAMES[variant], HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x + 16
+
+# `text` centered on `center`, turned by `angle`
+func draw_label(font: Font, center: Vector2, angle: float, text: String) -> void:
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
+	var baseline := (font.get_ascent(FONT_SIZE) - font.get_descent(FONT_SIZE)) * 0.5
+	draw_set_transform(center, angle)
+	draw_string(font, Vector2(-width * 0.5, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, INK)
+	draw_set_transform(Vector2.ZERO)
 "
 
 [sub_resource type="GDScript" id="GDScript_yt4do"]
@@ -48,36 +523,99 @@ func _physics_process(delta: float) -> void:
 
 [node name="SpaceTest" type="Node3D" unique_id=272191968]
 script = SubResource("GDScript_k0hn8")
+speed = 5
 
 [node name="SpaceRenderer" type="SpaceDebugDraw" parent="." unique_id=555076313]
+unique_name_in_owner = true
 script = SubResource("GDScript_7ngx2")
 
+[node name="TileMeshes" type="Node3D" parent="." unique_id=1734028951]
+unique_name_in_owner = true
+script = SubResource("GDScript_t1les")
+cutaway = SubResource("Shader_cutaway")
+
+[node name="Highlight" type="MeshInstance3D" parent="." unique_id=1807432196]
+visible = false
+material_override = SubResource("ShaderMaterial_sheet")
+cast_shadow = 0
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=402918374]
+transform = Transform3D(0.906308, -0.346189, 0.242404, 0, 0.573576, 0.819152, -0.422618, -0.742404, 0.519837, 0, 0, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1573309821]
+environment = SubResource("Environment_sun")
+
 [node name="Camera3D" type="Camera3D" parent="." unique_id=343441278]
-transform = Transform3D(1, 0, 0, 0, 0.1782012, 0.98399407, 0, -0.98399407, 0.1782012, 1.4456718, 7.869521, 2.7572842)
+transform = Transform3D(0.7071068, -0.35355338, 0.61237246, 0, 0.8660254, 0.50000006, -0.7071068, -0.35355338, 0.61237246, 31.687, 12.5, 26.607)
+projection = 1
 current = true
+size = 12.0
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1421639761]
 
-[node name="Panel" type="Panel" parent="CanvasLayer" unique_id=1282985620]
-self_modulate = Color(1, 1, 1, 0.47058824)
-offset_right = 467.0
-offset_bottom = 159.0
+[node name="HUD" type="VBoxContainer" parent="CanvasLayer" unique_id=977641202]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 48.0
+offset_bottom = 48.0
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/Panel" unique_id=1996905905]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="View" type="PanelContainer" parent="CanvasLayer/HUD" unique_id=1649302117]
+unique_name_in_owner = true
+self_modulate = Color(1, 1, 1, 0.47058824)
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/HUD/View" unique_id=731058249]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 4
+
+[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer/HUD/View/MarginContainer" unique_id=1275993660]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="CanvasLayer/HUD/View/MarginContainer/HBoxContainer" unique_id=388201456]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "view:"
+vertical_alignment = 1
+
+[node name="TileSize" type="OptionButton" parent="CanvasLayer/HUD/View/MarginContainer/HBoxContainer" unique_id=1920441873]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+
+[node name="Minimap" type="Control" parent="CanvasLayer/HUD" unique_id=1180539466]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
+script = SubResource("GDScript_mnmap")
+
+[node name="Info" type="PanelContainer" parent="CanvasLayer/HUD" unique_id=1282985620]
+unique_name_in_owner = true
+self_modulate = Color(1, 1, 1, 0.47058824)
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/HUD/Info" unique_id=1996905905]
+layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="Label" type="Label" parent="CanvasLayer/Panel/MarginContainer" unique_id=1982470312]
+[node name="Label" type="Label" parent="CanvasLayer/HUD/Info/MarginContainer" unique_id=1982470312]
 layout_mode = 2
 size_flags_vertical = 1
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 18
 text = "f"
 script = SubResource("GDScript_yt4do")
