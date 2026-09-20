@@ -17,6 +17,7 @@ const TILE_WIDTH = 32
 const TILE_HEIGHTS = [[16, '2:1'], [18, '16:9'], [20, '8:5'], [22, '16:11'], [24, '4:3'], [28, '8:7'], [32, '1:1']]
 const START_TILE_HEIGHT = 24 # the view the scene starts in, 32x24
 const GROUND_LAYERS = 2 # brick layer l stands at (l - GROUND_LAYERS) * brick height
+const MOB_COLOR = Color('#c0504d')
 
 @onready var camera: Camera3D = $Camera3D
 @onready var highlight: MeshInstance3D = $Highlight
@@ -24,6 +25,7 @@ const GROUND_LAYERS = 2 # brick layer l stands at (l - GROUND_LAYERS) * brick he
 
 var brick_height: float # the height of one brick layer
 var hero_extent: Vector3 # half the hero's size
+var mobs: Array[MeshInstance3D] = [] # one box per mob, in the playground's order
 
 func _ready() -> void:
 	var info: Array = PythonScript.eval(PLAYGROUND + '.map_info()')
@@ -39,6 +41,19 @@ func _ready() -> void:
 	skin.albedo_color = Color('#e8e0cf')
 	body.material = skin
 	hero.mesh = body
+	# The mobs, drawn the same way: a box the size of the body, where the last
+	# step left it.
+	var mob_extent: Vector3 = info[5]
+	var mob_body := BoxMesh.new()
+	mob_body.size = mob_extent * 2
+	var mob_skin := StandardMaterial3D.new()
+	mob_skin.albedo_color = MOB_COLOR
+	mob_body.material = mob_skin
+	for i in int(info[6]):
+		var mob := MeshInstance3D.new()
+		mob.mesh = mob_body
+		add_child(mob)
+		mobs.append(mob)
 	# The marker is a sheet lying on the plane under the hero's feet, a little
 	# wider than a cell so that it covers the top of the brick below it.
 	var sheet := PlaneMesh.new()
@@ -51,6 +66,11 @@ func _ready() -> void:
 	var start: int = TILE_HEIGHTS.map(func(tile): return tile[0]).find(START_TILE_HEIGHT)
 	%TileSize.select(start)
 	set_view(start)
+	show_mobs()
+
+# what the mobs are and do, next to the view picker, with the keys that change it
+func show_mobs() -> void:
+	%Mobs.text = PythonScript.eval(PLAYGROUND + '.mob_info()')
 
 static func pitch_of(tile_height: int) -> float:
 	return rad_to_deg(asin(float(tile_height) / TILE_WIDTH))
@@ -78,12 +98,29 @@ func _physics_process(delta: float) -> void:
 	var s = PLAYGROUND + '.move_hero_and_step({0}, {1}, {2}, {3})'
 	var pos: Vector3 = PythonScript.eval(s.format([move.x, move.y, delta, jump]))
 	hero.position = pos
+	var places: Array = PythonScript.eval(PLAYGROUND + '.mob_positions()')
+	for i in mobs.size():
+		mobs[i].visible = i < places.size() # fewer find room around a walled-in hero
+		if mobs[i].visible:
+			mobs[i].position = places[i]
+	%Minimap.mobs = places
 	camera.position = pos + camera.basis.z * CAMERA_DISTANCE
 	%TileMeshes.set_hero(pos, hero_extent)
 	aim()
 	%Minimap.hero = pos
 
 func _unhandled_input(event: InputEvent) -> void:
+	# F makes the hero and the mobs soft or solid to each other, which creates
+	# them anew, since a body keeps its flags; G has the mobs chase or stand.
+	var key := event as InputEventKey
+	if key != null:
+		if key.pressed and not key.echo and key.physical_keycode == KEY_F:
+			PythonScript.eval(PLAYGROUND + '.toggle_soft()')
+			show_mobs()
+		elif key.pressed and not key.echo and key.physical_keycode == KEY_G:
+			PythonScript.eval(PLAYGROUND + '.toggle_chase()')
+			show_mobs()
+		return
 	var button := event as InputEventMouseButton
 	if button == null or not button.pressed:
 		return
@@ -385,6 +422,7 @@ const FONT_SIZE = 17
 const INK = Color(0.85, 0.88, 0.9)
 const EDGE = Color(0.09, 0.11, 0.13, 0.6)
 const AIM = Color(1, 0.85, 0.2) # as the highlight in 3D
+const MOB = Color(0.75, 0.31, 0.3) # as the mobs in 3D
 const NAMES = ['PILLAR', 'WALL_SW', 'WALL_SE', 'WALL_L', 'FULL', 'STAIR']
 
 @onready var colors: Array = %TileMeshes.COLORS
@@ -393,6 +431,7 @@ var map_size: Vector2i
 var chunk_size: int
 var brick_height: float
 var hero_extent: Vector3
+var mob_extent: Vector3
 var bricks := [[], [], [], []] # per brick layer: [footprint in cells, variant]
 var tops := PackedInt32Array() # per cell: layer * 8 + variant of its topmost brick, or -1
 var map := SubViewport.new() # the whole map, drawn once per tile rebuild
@@ -407,6 +446,10 @@ var aim = null: # the aimed cell, a Vector2i, or null
 	set(value):
 		aim = value
 		view.queue_redraw()
+var mobs := []: # where the mobs stand, a Vector3 each
+	set(value):
+		mobs = value
+		view.queue_redraw()
 
 func _ready() -> void:
 	var info: Array = PythonScript.eval('__import__(\"sbx\").playground.instance.map_info()')
@@ -414,6 +457,7 @@ func _ready() -> void:
 	chunk_size = info[2]
 	brick_height = info[3]
 	hero_extent = info[4]
+	mob_extent = info[5]
 	custom_minimum_size = Vector2(VIEW * CELL + MARGIN * 2, VIEW * CELL + MARGIN * 2 + LEGEND)
 	map.size = map_size * CELL
 	map.disable_3d = true
@@ -513,6 +557,15 @@ func draw_view() -> void:
 			view.draw_texture(texture, shift + Vector2(i * map_size.x, j * map_size.y) * CELL)
 	if aim != null:
 		view.draw_rect(Rect2(cell_center(aim) - Vector2(CELL, CELL) * 0.5, Vector2(CELL, CELL)), AIM, false, 3.0)
+	# the mobs' footprints, each at its mirror nearest the hero
+	var mob_half := Vector2(mob_extent.x, mob_extent.z) * CELL
+	for place in mobs:
+		var p: Vector3 = place
+		var d := Vector2(p.x - hero.x, p.z - hero.z)
+		d = Vector2(wrapf(d.x, -map_size.x * 0.5, map_size.x * 0.5), wrapf(d.y, -map_size.y * 0.5, map_size.y * 0.5))
+		var footprint := Rect2(view.size * 0.5 + d * CELL - mob_half, mob_half * 2)
+		view.draw_rect(footprint, MOB)
+		view.draw_rect(footprint, EDGE, false, 1.0)
 	# the hero's footprint, in the middle
 	var extent := Vector2(hero_extent.x, hero_extent.z) * CELL
 	var body := Rect2(view.size * 0.5 - extent, extent * 2)
@@ -734,6 +787,13 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 18
+
+[node name="Mobs" type="Label" parent="CanvasLayer/HUD/View/MarginContainer/HBoxContainer" unique_id=1462093377]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "mobs"
+vertical_alignment = 1
 
 [node name="Minimap" type="Control" parent="CanvasLayer/HUD" unique_id=1180539466]
 unique_name_in_owner = true

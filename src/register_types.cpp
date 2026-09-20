@@ -23,6 +23,10 @@
 using namespace godot;
 using namespace pkpy;
 
+// Set once the editor level has registered its types, so that uninitialize()
+// undoes exactly what initialize() did.
+static bool editor_level_initialized = false;
+
 static void initialize(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		debug_print("==> initializing pocketpy...\n");
@@ -62,6 +66,7 @@ static void initialize(ModuleInitializationLevel p_level) {
 		ClassDB::register_internal_class<PythonSyntaxHighlighter>();
 		ClassDB::register_internal_class<PythonEditorPlugin>();
 		EditorPlugins::add_by_type<PythonEditorPlugin>();
+		editor_level_initialized = true;
 	}
 }
 
@@ -83,6 +88,12 @@ static void uninitialize(ModuleInitializationLevel p_level) {
 		py_finalize();
 		debug_print("==> pocketpy uninitialized.\n");
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+		// Nothing was registered when an editor binary ran a game or a script;
+		// unregistering anyway makes the engine report three errors at exit.
+		if (!editor_level_initialized) {
+			return;
+		}
+		editor_level_initialized = false;
 		EditorPlugins::remove_by_type<PythonEditorPlugin>();
 		unregister_module_source_io();
 	}
