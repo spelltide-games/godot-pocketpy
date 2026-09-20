@@ -17,27 +17,28 @@ const TILE_WIDTH = 32
 const TILE_HEIGHTS = [[16, '2:1'], [18, '16:9'], [20, '8:5'], [22, '16:11'], [24, '4:3'], [28, '8:7'], [32, '1:1']]
 const START_TILE_HEIGHT = 24 # the view the scene starts in, 32x24
 const GROUND_LAYERS = 2 # brick layer l stands at (l - GROUND_LAYERS) * brick height
-# Stairs move the hero's feet a quarter of a brick at a time, which the camera
-# would show as a jump. Smoothed, it keeps what it owes the hero as an offset
-# and closes it at a steady speed, this much faster than the hero climbs, so
-# the view rises evenly while the feet step. The offset never passes one brick,
-# so a long fall or a teleport carries the camera along rather than leaving it.
-const CAMERA_CATCH_UP = 1.2
 
 @onready var camera: Camera3D = $Camera3D
 @onready var highlight: MeshInstance3D = $Highlight
+@onready var hero: MeshInstance3D = $Hero
 
 var brick_height: float # the height of one brick layer
 var hero_extent: Vector3 # half the hero's size
-var camera_height: float # the height the camera follows, the hero's own when it is not smoothed
 
 func _ready() -> void:
 	var info: Array = PythonScript.eval(PLAYGROUND + '.map_info()')
 	brick_height = info[3]
 	hero_extent = info[4]
 	# start the camera at the hero's own height rather than easing up to it
-	var hero: Vector3 = PythonScript.eval(PLAYGROUND + '.space.body_get_position(' + PLAYGROUND + '.hero)')
-	camera_height = hero.y
+	# The hero, drawn as the box it collides as and standing exactly where the
+	# last step left it: nothing here eases or interpolates, so what is on screen
+	# is what the physics did.
+	var body := BoxMesh.new()
+	body.size = hero_extent * 2
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color('#e8e0cf')
+	body.material = skin
+	hero.mesh = body
 	# The marker is a sheet lying on the plane under the hero's feet, a little
 	# wider than a cell so that it covers the top of the brick below it.
 	var sheet := PlaneMesh.new()
@@ -76,26 +77,11 @@ func _physics_process(delta: float) -> void:
 	var jump = 'True' if Input.is_key_pressed(KEY_SPACE) else 'False'
 	var s = PLAYGROUND + '.move_hero_and_step({0}, {1}, {2}, {3})'
 	var pos: Vector3 = PythonScript.eval(s.format([move.x, move.y, delta, jump]))
-	camera.position = follow_height(pos, delta) + camera.basis.z * CAMERA_DISTANCE
+	hero.position = pos
+	camera.position = pos + camera.basis.z * CAMERA_DISTANCE
 	%TileMeshes.set_hero(pos, hero_extent)
 	aim()
 	%Minimap.hero = pos
-
-# The point the camera looks at: the hero, with its height eased after it while
-# %Smooth is on, so a stair does not jump the whole view. Only the height is
-# eased; the hero walks smoothly on the other two axes, and lagging them would
-# only drag the cursor behind the map.
-func follow_height(pos: Vector3, delta: float) -> Vector3:
-	if not %Smooth.button_pressed:
-		camera_height = pos.y
-		return pos
-	# what the hero's move just opened up, on top of what was left of the last
-	var offset := clampf(camera_height - pos.y, -brick_height, brick_height)
-	# One cell of a stair climbs a whole brick, so the hero rises at its walking
-	# speed times the brick height.
-	var catch_up: float = speed * brick_height * CAMERA_CATCH_UP
-	camera_height = pos.y + move_toward(offset, 0.0, catch_up * delta)
-	return Vector3(pos.x, camera_height, pos.z)
 
 func _unhandled_input(event: InputEvent) -> void:
 	var button := event as InputEventMouseButton
@@ -693,6 +679,9 @@ visible = false
 material_override = SubResource("ShaderMaterial_sheet")
 cast_shadow = 0
 
+[node name="Hero" type="MeshInstance3D" parent="." unique_id=1807432197]
+unique_name_in_owner = true
+
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=402918374]
 transform = Transform3D(0.906308, -0.346189, 0.242404, 0, 0.573576, 0.819152, -0.422618, -0.742404, 0.519837, 0, 0, 0)
 
@@ -745,14 +734,6 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 18
-
-[node name="Smooth" type="CheckBox" parent="CanvasLayer/HUD/View/MarginContainer/HBoxContainer" unique_id=1920441874]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-theme_override_font_sizes/font_size = 18
-button_pressed = true
-text = "smooth"
 
 [node name="Minimap" type="Control" parent="CanvasLayer/HUD" unique_id=1180539466]
 unique_name_in_owner = true
