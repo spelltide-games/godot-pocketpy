@@ -17,17 +17,27 @@ const TILE_WIDTH = 32
 const TILE_HEIGHTS = [[16, '2:1'], [18, '16:9'], [20, '8:5'], [22, '16:11'], [24, '4:3'], [28, '8:7'], [32, '1:1']]
 const START_TILE_HEIGHT = 24 # the view the scene starts in, 32x24
 const GROUND_LAYERS = 2 # brick layer l stands at (l - GROUND_LAYERS) * brick height
+# Stairs move the hero's feet a quarter of a brick at a time, which the camera
+# would show as a jump. Smoothed, it keeps what it owes the hero as an offset
+# and closes it at a steady speed, this much faster than the hero climbs, so
+# the view rises evenly while the feet step. The offset never passes one brick,
+# so a long fall or a teleport carries the camera along rather than leaving it.
+const CAMERA_CATCH_UP = 1.2
 
 @onready var camera: Camera3D = $Camera3D
 @onready var highlight: MeshInstance3D = $Highlight
 
 var brick_height: float # the height of one brick layer
 var hero_extent: Vector3 # half the hero's size
+var camera_height: float # the height the camera follows, the hero's own when it is not smoothed
 
 func _ready() -> void:
 	var info: Array = PythonScript.eval(PLAYGROUND + '.map_info()')
 	brick_height = info[3]
 	hero_extent = info[4]
+	# start the camera at the hero's own height rather than easing up to it
+	var hero: Vector3 = PythonScript.eval(PLAYGROUND + '.space.body_get_position(' + PLAYGROUND + '.hero)')
+	camera_height = hero.y
 	# The marker is a sheet lying on the plane under the hero's feet, a little
 	# wider than a cell so that it covers the top of the brick below it.
 	var sheet := PlaneMesh.new()
@@ -66,10 +76,26 @@ func _physics_process(delta: float) -> void:
 	var jump = 'True' if Input.is_key_pressed(KEY_SPACE) else 'False'
 	var s = PLAYGROUND + '.move_hero_and_step({0}, {1}, {2}, {3})'
 	var pos: Vector3 = PythonScript.eval(s.format([move.x, move.y, delta, jump]))
-	camera.position = pos + camera.basis.z * CAMERA_DISTANCE
+	camera.position = follow_height(pos, delta) + camera.basis.z * CAMERA_DISTANCE
 	%TileMeshes.set_hero(pos, hero_extent)
 	aim()
 	%Minimap.hero = pos
+
+# The point the camera looks at: the hero, with its height eased after it while
+# %Smooth is on, so a stair does not jump the whole view. Only the height is
+# eased; the hero walks smoothly on the other two axes, and lagging them would
+# only drag the cursor behind the map.
+func follow_height(pos: Vector3, delta: float) -> Vector3:
+	if not %Smooth.button_pressed:
+		camera_height = pos.y
+		return pos
+	# what the hero's move just opened up, on top of what was left of the last
+	var offset := clampf(camera_height - pos.y, -brick_height, brick_height)
+	# One cell of a stair climbs a whole brick, so the hero rises at its walking
+	# speed times the brick height.
+	var catch_up: float = speed * brick_height * CAMERA_CATCH_UP
+	camera_height = pos.y + move_toward(offset, 0.0, catch_up * delta)
+	return Vector3(pos.x, camera_height, pos.z)
 
 func _unhandled_input(event: InputEvent) -> void:
 	var button := event as InputEventMouseButton
@@ -77,7 +103,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var edit := ''
 	if button.button_index == MOUSE_BUTTON_LEFT:
-		edit = '.place()'
+		edit = %Tools.action() # whichever tool the toolbar has selected
 	elif button.button_index == MOUSE_BUTTON_RIGHT:
 		edit = '.remove()'
 	if edit and PythonScript.eval(PLAYGROUND + edit):
@@ -91,7 +117,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func aim() -> void:
 	var mouse := get_viewport().get_mouse_position()
 	var s: String
-	if %Info.get_global_rect().has_point(mouse) or %View.get_global_rect().has_point(mouse) or %TileSize.get_popup().visible:
+	var over_hud: bool = %Info.get_global_rect().has_point(mouse) or %View.get_global_rect().has_point(mouse) or %Tools.get_global_rect().has_point(mouse)
+	if over_hud or %TileSize.get_popup().visible:
 		s = '.aim_clear()'
 	elif %Minimap.get_global_rect().has_point(mouse):
 		var cell: Vector2i = %Minimap.cell_at(mouse)
@@ -152,17 +179,21 @@ const WALL_SW = 1
 const WALL_SE = 2
 const WALL_L = 3
 const FULL = 4
+const STAIR = 5 # not a rule-tile variant: a stair tile, drawn as its steps
+const STAIR_PARTS = 4
 const COLORS = [
 	Color('#ad6698'), # PILLAR
 	Color('#d88a48'), # WALL_SW
 	Color('#4a8bc3'), # WALL_SE
 	Color('#5ba16a'), # WALL_L
 	Color('#8f98a1'), # FULL
+	Color('#c9a227'), # STAIR
 ]
 
 @export var cutaway: Shader # the tiles' shader
 
 var instances := {} # [box extent, variant] -> its MultiMeshInstance3D
+var brick_height: float # the height of one layer, which tells slots apart
 
 # A brick fills the west half of its cell only toward a west neighbor, and the
 # north half only toward a north one, so the size of a single box gives its
@@ -174,13 +205,22 @@ static func variant_of(extent: Vector3) -> int:
 		return FULL if north else WALL_SW
 	return WALL_SE if north else PILLAR
 
-# The slot a box sits in: its cell, and the height that names its layer.
-static func slot_of(transforms: PackedFloat32Array, i: int) -> Vector3:
-	return Vector3(floorf(transforms[i + 3]), transforms[i + 7], floorf(transforms[i + 11]))
+# The slot a box sits in: its cell and its layer. A stair's steps stand at four
+# heights inside one layer, so the layer, not the height, is what groups them.
+func slot_of(transforms: PackedFloat32Array, i: int) -> Vector3:
+	return Vector3(floorf(transforms[i + 3]), floorf(transforms[i + 7] / brick_height), floorf(transforms[i + 11]))
 
-# How many boxes each slot holds. A slot holding two of them holds an L, the
-# only variant of the rule tile made of two parts.
-static func count_parts(boxes: Array) -> Dictionary:
+# What the box at `i` belongs to, by how many boxes share its slot: four are a
+# stair's steps, two are the L, the only rule-tile variant made of two parts,
+# and one box gives its variant by its size.
+func variant_at(parts: Dictionary, transforms: PackedFloat32Array, i: int, extent: Vector3) -> int:
+	var count: int = parts[slot_of(transforms, i)]
+	if count >= STAIR_PARTS:
+		return STAIR
+	return WALL_L if count > 1 else variant_of(extent)
+
+# How many boxes each slot holds.
+func count_parts(boxes: Array) -> Dictionary:
 	var parts := {}
 	for box in boxes:
 		var transforms: PackedFloat32Array = box[1]
@@ -190,6 +230,7 @@ static func count_parts(boxes: Array) -> Dictionary:
 	return parts
 
 func _ready() -> void:
+	brick_height = PythonScript.eval('__import__(\"sbxcpp\").space.get_tile_brick_height()')
 	%SpaceRenderer.tiles_rebuilt.connect(refresh)
 	refresh()
 
@@ -205,7 +246,7 @@ func refresh() -> void:
 		# it is made of, so the group is split by variant before it is uploaded.
 		var buffers := {}
 		for i in range(0, transforms.size(), 12):
-			var variant := WALL_L if parts[slot_of(transforms, i)] > 1 else variant_of(extent)
+			var variant := variant_at(parts, transforms, i, extent)
 			if not buffers.has(variant):
 				buffers[variant] = PackedFloat32Array()
 			buffers[variant].append_array(transforms.slice(i, i + 12))
@@ -254,7 +295,8 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // pixel in each 2x2 cut out of every brick whose cell hides part of the diamond
 // under the hero's feet, the top of the cell it stands in, from the camera, so
 // that where it stands shows through: the simplest dithered cutaway. A brick is
-// cut whole or not at all, and the ground, layers 0 and 1, never.
+// cut whole or not at all; the ground, layers 0 and 1, never is, and neither is
+// anything in the hero's own cell, such as the stair it stands on.
 uniform vec4 albedo : source_color = vec4(1.0);
 uniform vec3 half_size; // of this material's bricks, as drawn
 uniform vec3 hero; // the middle of the hero's body
@@ -298,7 +340,11 @@ void vertex() {
 	vec3 hi = lo + vec3(1.0, 2.0 * half_size.y, 1.0);
 	vec3 d = INV_VIEW_MATRIX[2].xyz; // the camera's +Z
 	bool ground = brick.y < 0.0; // layers 0 and 1 lie below y = 0
-	cut = !ground && ray_meets(d, lo - diamond - half_cell, hi - diamond + half_cell) ? 1.0 : 0.0;
+	// Nor is the cell the hero stands in ever cut. Judging a brick by its whole
+	// cell reads the treads of the stair it stands on, which fill only a part of
+	// theirs, as standing over the diamond, and the stair breaks up under it.
+	bool own_cell = lo.x == diamond.x - 0.5 && lo.z == diamond.z - 0.5;
+	cut = !ground && !own_cell && ray_meets(d, lo - diamond - half_cell, hi - diamond + half_cell) ? 1.0 : 0.0;
 }
 
 void fragment() {
@@ -348,12 +394,12 @@ script/source = "extends Control
 const CELL = 24 # pixels per cell
 const VIEW = 22 # cells across the view
 const MARGIN = 30 # around the view, for the compass
-const LEGEND = 34 # below it
+const LEGEND = 56 # below it, two rows
 const FONT_SIZE = 17
 const INK = Color(0.85, 0.88, 0.9)
 const EDGE = Color(0.09, 0.11, 0.13, 0.6)
 const AIM = Color(1, 0.85, 0.2) # as the highlight in 3D
-const NAMES = ['PILLAR', 'WALL_SW', 'WALL_SE', 'WALL_L', 'FULL']
+const NAMES = ['PILLAR', 'WALL_SW', 'WALL_SE', 'WALL_L', 'FULL', 'STAIR']
 
 @onready var colors: Array = %TileMeshes.COLORS
 
@@ -435,7 +481,7 @@ func refresh() -> void:
 			var layer := floori(c.y / brick_height) + 2
 			if layer < 0 or layer > 3:
 				continue
-			var variant: int = tiles.WALL_L if parts[tiles.slot_of(transforms, i)] > 1 else tiles.variant_of(e)
+			var variant: int = tiles.variant_at(parts, transforms, i, e)
 			var cell := Vector2i(floori(c.x), floori(c.z))
 			var footprint := Rect2(c.x - e.x - cell.x, c.z - e.z - cell.y, e.x * 2, e.z * 2)
 			cell = Vector2i(posmod(cell.x, map_size.x), posmod(cell.y, map_size.y))
@@ -499,10 +545,14 @@ func _draw() -> void:
 	var x := float(MARGIN)
 	var y := MARGIN * 2 + view.size.y
 	var tiles := %TileMeshes
-	for variant in [tiles.FULL, tiles.WALL_SW, tiles.WALL_SE, tiles.WALL_L, tiles.PILLAR]:
+	for variant in [tiles.FULL, tiles.WALL_SW, tiles.WALL_SE, tiles.WALL_L, tiles.PILLAR, tiles.STAIR]:
+		var width := FONT_SIZE + 4 + font.get_string_size(NAMES[variant], HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x + 16
+		if x > MARGIN and x + width > MARGIN + view.size.x: # onto the next row
+			x = MARGIN
+			y += FONT_SIZE + 5
 		draw_rect(Rect2(x, y + 2, FONT_SIZE - 1, FONT_SIZE - 1), color_of(variant, 2))
 		draw_string(font, Vector2(x + FONT_SIZE + 4, y + FONT_SIZE), NAMES[variant], HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, INK)
-		x += FONT_SIZE + 4 + font.get_string_size(NAMES[variant], HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x + 16
+		x += width
 
 # `text` centered on `center`, turned by `angle`
 func draw_label(font: Font, center: Vector2, angle: float, text: String) -> void:
@@ -519,6 +569,110 @@ script/source = "extends Label
 func _physics_process(delta: float) -> void:
 	var s = '__import__(\"sbx\").playground.instance.debug_info()'
 	text = PythonScript.eval(s) as String
+"
+
+[sub_resource type="GDScript" id="GDScript_tools"]
+script/source = "extends Control
+
+# The toolbar at the bottom right: one icon per tool, picked with the number
+# keys or the mouse wheel, and run by a left click in the world. The icons are
+# drawn in the same dimetric view as the map, so a tool looks like what it
+# leaves behind.
+
+const SLOT = 52 # one icon
+const GAP = 6
+const CELL = 13.0 # half a cell's width in an icon
+const RISE = 15.0 # how tall a brick stands in one, tall enough to read the steps
+const INK = Color(0.85, 0.88, 0.9)
+const EDGE = Color(0.09, 0.11, 0.13, 0.6)
+const PANEL = Color(0, 0, 0, 0.45)
+const ACCENT = Color(1, 0.85, 0.2)
+const GONE = Color(0.85, 0.3, 0.25) # the cross of the remove tool
+# the name of each tool and the call a left click runs on the playground
+const TOOLS = [
+	['place', '.place(0)'],
+	['remove', '.remove()'],
+	['stair W', '.place(1)'],
+	['stair N', '.place(2)'],
+]
+
+@onready var tiles := %TileMeshes
+
+var selected := 0:
+	set(value):
+		selected = posmod(value, TOOLS.size())
+		queue_redraw()
+
+func _ready() -> void:
+	custom_minimum_size = Vector2(TOOLS.size() * SLOT + (TOOLS.size() - 1) * GAP, SLOT)
+
+# what a left click in the world runs
+func action() -> String:
+	return TOOLS[selected][1]
+
+func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key != null and key.pressed:
+		var index := key.physical_keycode - KEY_1
+		if index >= 0 and index < TOOLS.size():
+			selected = index
+			get_viewport().set_input_as_handled()
+		return
+	var button := event as InputEventMouseButton
+	if button == null or not button.pressed:
+		return
+	if button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		selected += 1
+		get_viewport().set_input_as_handled()
+	elif button.button_index == MOUSE_BUTTON_WHEEL_UP:
+		selected -= 1
+		get_viewport().set_input_as_handled()
+
+# a point of the icon's cell, x and z from -0.5 to 0.5 and y from its floor up
+func iso(middle: Vector2, x: float, y: float, z: float) -> Vector2:
+	return middle + Vector2((x - z) * CELL, (x + z) * CELL * 0.5 - y * RISE)
+
+# One box, as the dimetric camera sees it: its top, and the +X and +Z sides,
+# shaded as the tiles in the map are.
+func draw_box(middle: Vector2, lo: Vector3, hi: Vector3, color: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([iso(middle, hi.x, hi.y, lo.z), iso(middle, hi.x, hi.y, hi.z),
+		iso(middle, hi.x, lo.y, hi.z), iso(middle, hi.x, lo.y, lo.z)]), color.darkened(0.37))
+	draw_colored_polygon(PackedVector2Array([iso(middle, lo.x, hi.y, hi.z), iso(middle, hi.x, hi.y, hi.z),
+		iso(middle, hi.x, lo.y, hi.z), iso(middle, lo.x, lo.y, hi.z)]), color.darkened(0.2))
+	draw_colored_polygon(PackedVector2Array([iso(middle, lo.x, hi.y, lo.z), iso(middle, hi.x, hi.y, lo.z),
+		iso(middle, hi.x, hi.y, hi.z), iso(middle, lo.x, hi.y, hi.z)]), color)
+
+# The steps of a stair, drawn from the far one down to the one nearest the
+# camera, which is the lowest and the widest.
+func draw_stair(middle: Vector2, north: bool, color: Color) -> void:
+	for i in range(3, -1, -1):
+		var reach := 1.0 - i * 0.25
+		var lo := Vector3(-0.5, i * 0.25, -0.5)
+		var hi := Vector3(-0.5 + reach, (i + 1) * 0.25, 0.5) if not north else Vector3(0.5, (i + 1) * 0.25, -0.5 + reach)
+		draw_box(middle, lo, hi, color)
+
+func draw_tool(index: int, middle: Vector2) -> void:
+	var cube_lo := Vector3(-0.5, 0.0, -0.5)
+	var cube_hi := Vector3(0.5, 1.0, 0.5)
+	if index == 0:
+		draw_box(middle, cube_lo, cube_hi, tiles.COLORS[tiles.FULL])
+	elif index == 1:
+		draw_box(middle, cube_lo, cube_hi, tiles.COLORS[tiles.FULL].darkened(0.45))
+		var arm := Vector2(11, 11)
+		draw_line(middle - arm + Vector2(0, -6), middle + arm + Vector2(0, -6), GONE, 3.0)
+		draw_line(middle + Vector2(arm.x, -arm.y - 6), middle + Vector2(-arm.x, arm.y - 6), GONE, 3.0)
+	else:
+		draw_stair(middle, index == 3, tiles.COLORS[tiles.STAIR])
+
+func _draw() -> void:
+	var font := get_theme_default_font()
+	for i in TOOLS.size():
+		var rect := Rect2(i * (SLOT + GAP), 0, SLOT, SLOT)
+		draw_rect(rect, PANEL)
+		draw_rect(rect, ACCENT if i == selected else EDGE, false, 2.0)
+		draw_tool(i, rect.position + Vector2(SLOT * 0.5, SLOT * 0.78))
+		draw_string(font, rect.position + Vector2(5, 15), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 13,
+			ACCENT if i == selected else INK)
 "
 
 [node name="SpaceTest" type="Node3D" unique_id=272191968]
@@ -592,6 +746,14 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 18
 
+[node name="Smooth" type="CheckBox" parent="CanvasLayer/HUD/View/MarginContainer/HBoxContainer" unique_id=1920441874]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 18
+button_pressed = true
+text = "smooth"
+
 [node name="Minimap" type="Control" parent="CanvasLayer/HUD" unique_id=1180539466]
 unique_name_in_owner = true
 layout_mode = 2
@@ -619,3 +781,20 @@ size_flags_vertical = 1
 theme_override_font_sizes/font_size = 18
 text = "f"
 script = SubResource("GDScript_yt4do")
+
+[node name="Tools" type="Control" parent="CanvasLayer" unique_id=179342733]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -242.0
+offset_top = -68.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = SubResource("GDScript_tools")
