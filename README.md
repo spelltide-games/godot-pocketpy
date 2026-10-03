@@ -6,6 +6,8 @@ Write your Godot 4 game logic in Python, powered by [pocketpy](https://github.co
 
 A Python script works like a GDScript one: attach it to a node, export properties to the Inspector, declare signals, and implement Godot's virtual callbacks.
 
+完整中文用户文档见 [Wiki 用户手册](wiki/README.md)，包含安装、逐模块参考、使用示例、调试、导出及可选 SBX 扩展。
+
 ## How to use
 
 ### Requirements
